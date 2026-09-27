@@ -1,6 +1,6 @@
 # Architecture v1: modular monolith
 
-Status: target architecture with a Phase 1 application foundation implemented. The domain modules below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
+Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; the other domain modules below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
 
 ## System shape
 
@@ -58,7 +58,7 @@ Start synchronously. An application use case may coordinate multiple modules in 
 
 Use one shared PostgreSQL database with tenant-aware business tables. A tenant is a service business; customer, technician, work-order, appointment, invoice, and payment records belong to that business. Shared identity and platform records need separately defined ownership rather than blindly adding `tenant_id` everywhere.
 
-FIELD-001 proposes one Tenant concept without a separate Business entity, UUID v4 identity, a stable unique slug, ACTIVE/SUSPENDED status, audit timestamps, and optimistic locking. The [tenant domain design](tenant-domain.md) specifies the schema, constraints, indexes, and future ownership rules; [ADR 0003](../adr/0003-tenant-domain-model.md) records the tradeoffs. This is a proposed design, not implemented tenancy; persistence belongs to FIELD-002.
+FIELD-001 defines one Tenant concept without a separate Business entity, UUID v4 identity, a stable unique slug, ACTIVE/SUSPENDED status, audit timestamps, and optimistic locking. The [tenant domain design](tenant-domain.md) specifies the schema, constraints, indexes, and future ownership rules; [ADR 0003](../adr/0003-tenant-domain-model.md) records the tradeoffs. FIELD-002 implements tenant persistence and internal creation/retrieval use cases. It does not implement authenticated tenancy or expose tenant HTTP endpoints.
 
 Derive the effective tenant from authenticated identity and validated membership. If a user can select among tenants, validate that selection server-side before establishing context. A submitted `tenant_id`, guessed resource ID, or hidden frontend button is never sufficient authorization.
 
@@ -92,9 +92,9 @@ At v0.9, assess whether concrete notification, reporting, or integration couplin
 
 Kafka is excluded from the first MVP. Redis needs a demonstrated caching, rate-limiting, or coordination requirement. Kubernetes and AI are outside the initial MVP. Reserved infrastructure directories introduce no such tools. Future service extraction requires measured benefits and operational readiness, as described in ADR 0001.
 
-## Phase 1 implementation boundary
+## Current implementation boundary
 
-Only `com.fieldops.FieldOpsApplication` and `com.fieldops.health.HealthController` exist as application Java code. There are no domain entities or repositories. The initial Flyway migration executes `SELECT 1` and establishes version history without business tables. The module map above remains the intended evolution, not a list of implemented packages.
+`com.fieldops.tenant` now contains a JPA-mapped domain entity with validation and explicit lifecycle operations, a narrow Spring Data repository, and a transactional application service returning immutable snapshots. Using one annotated domain entity avoids duplicate persistence models and mapping code for this small module. V1 establishes migration history; V2 creates the tenant table. The remaining module map is intended evolution, not a list of implemented packages.
 
 The Next.js development page uses a same-origin `/api/health` route to call Spring's `/api/v1/health` with a bounded timeout and no caching. This route is a presentation-layer adapter, not another business service. The [OpenAPI contract](openapi.yaml) describes the application endpoint. `/actuator/health` separately reports aggregate health including PostgreSQL without exposing component details.
 

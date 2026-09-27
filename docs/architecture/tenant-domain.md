@@ -1,6 +1,6 @@
 # Tenant domain design
 
-Status: proposed design for [FIELD-001](https://github.com/TushGH/fieldops/issues/1). Persistence implementation belongs to FIELD-002. No tenant table, domain code, authentication, or tenant isolation is implemented by this document.
+Status: FIELD-001 design implemented for persistence in FIELD-002. Tenant domain code, V2 migration, repository, and internal creation/retrieval use cases exist. Authentication, authorization, and tenant isolation remain unimplemented.
 
 This design follows [AGENTS.md](../../AGENTS.md), the [product definition](../product/PRODUCT.md), [architecture v1](architecture-v1.md), and [ADR 0003](../adr/0003-tenant-domain-model.md).
 
@@ -26,7 +26,7 @@ Use one `public.tenants` table in the existing shared PostgreSQL database. A sch
 | `updatedAt` | `updated_at` | `timestamptz` | Required last persisted change instant |
 | `version` | `version` | `bigint` | Required optimistic-lock version; initially zero |
 
-The application supplies IDs, initial status, timestamps, and initial version. These are server-controlled values, not client-selected persistence metadata. `version` is concurrency metadata, not audit history; persistence increments it when updating the row.
+The application supplies IDs, initial status, timestamps, and initial version. These are server-controlled values, not client-selected persistence metadata. `version` is concurrency metadata, not audit history; persistence increments it when updating the row. The Java version is nullable only before persistence so Spring Data recognizes a new entity with an assigned UUID; Hibernate initializes the persisted version to zero.
 
 Do not initially add owner IDs, contact addresses, subscription plans, tax details, generic JSON settings, or soft-delete fields. Ownership roles belong in the future membership design. Add business timezone and currency when scheduling and billing need them, with explicit configuration rather than guessed defaults.
 
@@ -47,7 +47,7 @@ The name column length bounds it to 200 characters. Different tenants may have t
 
 Use a Java enum persisted as a string with a database check constraint. A PostgreSQL enum offers a dedicated type but adds type-specific migration and mapping concerns. A lookup table suits configurable statuses, which are not required. An unconstrained string permits invalid data. The check enforces allowed values, not transitions between old and new states.
 
-Implement the table through a new Flyway migration in FIELD-002. Preserve released V1 and keep Hibernate `ddl-auto=validate`. This schema specification is not a migration.
+V2__create_tenants.sql implements the table while preserving released V1 and Hibernate `ddl-auto=validate`. The name check explicitly lists Unicode White_Space for edge trimming and rejects PostgreSQL control characters. Application validation also rejects ISO control characters. Tests cover ASCII whitespace, nonbreaking spaces, and em spaces.
 
 ## Primary key strategy
 
@@ -147,6 +147,8 @@ Initially use application enforcement and database integrity constraints, consis
 
 ## Implementation and verification boundaries
 
-FIELD-001 records the model, ownership strategy, and decisions. FIELD-002 implements persistence and PostgreSQL Testcontainers tests for creation, retrieval, constraints, timestamps, and optimistic concurrency. Include concurrent slug conflicts and invalid values when exercising database constraints. Unit tests should cover name/slug validation and lifecycle behavior.
+FIELD-001 records the model, ownership strategy, and decisions. FIELD-002 implements persistence and PostgreSQL Testcontainers tests for creation, retrieval, constraints, timestamps, optimistic concurrency, concurrent slug conflicts, and invalid direct SQL writes. Unit tests cover name/slug validation and lifecycle behavior.
+
+TenantService exposes transactional create and read-only findById operations returning TenantDetails snapshots. It is an internal, unauthenticated use case, not a public API. Duplicate slug claims fail with Spring DataIntegrityViolationException and the named uq_tenants_slug constraint; a future API must translate that into an appropriate conflict response. The repository deliberately exposes no delete or unrestricted list operation. Domain entities carry JPA mappings to avoid a duplicate persistence model; persistence access remains inside the tenant module. Lifecycle changes are domain operations exercised in persistence tests, without adding operator endpoints or authorization workflows.
 
 Tenant isolation tests involving business records and authenticated access belong with those features. Authentication, RBAC, trusted tenant resolution, frontend onboarding, customer/technician entities, Redis, Kafka, and service extraction remain outside this issue. No public business API should be inferred from the existence of tenant persistence.

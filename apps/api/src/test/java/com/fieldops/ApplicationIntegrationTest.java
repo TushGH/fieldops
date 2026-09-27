@@ -59,12 +59,12 @@ class ApplicationIntegrationTest {
     }
 
     @Test
-    void connectsToPostgresAndAppliesInitialMigration() {
+    void connectsToPostgresAndAppliesMigrations() {
         var jdbc = context.getBean(JdbcTemplate.class);
         var flyway = context.getBean(Flyway.class);
         assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT version()", String.class)).startsWith("PostgreSQL 17.");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success",
