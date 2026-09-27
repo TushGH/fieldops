@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.fieldops.tenant.domain.Membership;
+import com.fieldops.tenant.domain.MembershipRole;
 import com.fieldops.tenant.infrastructure.MembershipRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,12 @@ public class MembershipService {
         // Foreign keys and pair uniqueness validate relationships atomically,
         // including races with deletion or another membership creation.
         return MembershipDetails.from(memberships.saveAndFlush(Membership.create(tenantId, userId)));
+    }
+
+    /** Trusted provisioning only; business requests use TenantWorkspaceService. */
+    @Transactional
+    public MembershipDetails create(UUID tenantId, UUID userId, MembershipRole role) {
+        return MembershipDetails.from(memberships.saveAndFlush(Membership.create(tenantId, userId, role)));
     }
 
     public Optional<MembershipDetails> find(UUID tenantId, UUID userId) {

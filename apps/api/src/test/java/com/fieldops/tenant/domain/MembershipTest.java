@@ -15,6 +15,7 @@ class MembershipTest {
         var id = membership.getId();
         assertThat(id.version()).isEqualTo(4);
         assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+        assertThat(membership.getRole()).isEqualTo(MembershipRole.TECHNICIAN);
         assertThat(membership.getCreatedAt()).isEqualTo(membership.getUpdatedAt());
         membership.deactivate();
         membership.deactivate();
@@ -25,6 +26,16 @@ class MembershipTest {
         assertThat(membership.getId()).isEqualTo(id);
         assertThat(membership.getTenantId()).isEqualTo(tenantId);
         assertThat(membership.getUserId()).isEqualTo(userId);
+    }
+
+    @Test
+    void assignsRolesPerMembershipAndRejectsMissingRoles() {
+        var membership = Membership.create(UUID.randomUUID(), UUID.randomUUID(), MembershipRole.BUSINESS_OWNER);
+        assertThat(membership.getRole()).isEqualTo(MembershipRole.BUSINESS_OWNER);
+        membership.assignRole(MembershipRole.DISPATCHER);
+        assertThat(membership.getRole()).isEqualTo(MembershipRole.DISPATCHER);
+        assertThatNullPointerException().isThrownBy(() -> membership.assignRole(null));
+        assertThatNullPointerException().isThrownBy(() -> Membership.create(UUID.randomUUID(), UUID.randomUUID(), null));
     }
 
     @Test

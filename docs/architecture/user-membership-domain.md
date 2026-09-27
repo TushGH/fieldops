@@ -1,12 +1,12 @@
 # User and membership domain
 
-Status: implemented for [FIELD-003](https://github.com/TushGH/fieldops/issues/3). FIELD-003 establishes identity records and relationships. FIELD-004 adds [session authentication](authentication.md); authorization remains deferred. See [ADR 0004](../adr/0004-users-and-tenant-memberships.md) for the decision and alternatives.
+Status: implemented for [FIELD-003](https://github.com/TushGH/fieldops/issues/3). FIELD-003 establishes identity records and relationships. FIELD-004 adds [session authentication](authentication.md); FIELD-005–008 add [membership roles and tenant access enforcement](tenant-access.md). See [ADR 0004](../adr/0004-users-and-tenant-memberships.md) for the decision and alternatives.
 
 ## Domain boundaries
 
 - **User:** a global FieldOps identity/profile, owned by `identity`. It has no tenant_id. FIELD-004 optionally adds a separate local password credential; a profile alone remains neither a login credential nor a verified identity.
 - **Tenant:** one service business and its business-data ownership boundary, owned by `tenant`. The [existing Tenant design](tenant-domain.md) is unchanged.
-- **Membership:** the relationship between one user and one tenant, owned by `tenant`. It has its own identity and lifecycle and currently contains no roles or permissions.
+- **Membership:** the relationship between one user and one tenant, owned by `tenant`. It has its own identity and lifecycle. FIELD-005 adds a tenant-specific role.
 
 ```mermaid
 erDiagram
@@ -62,7 +62,7 @@ Email is unverified contact data, not proof of identity. FIELD-004 adds email lo
 
 Users start ACTIVE and support explicit disable(), reactivate(), and rename() domain operations. Memberships start ACTIVE and support deactivate() and reactivate(). Repeating the current status is a no-op. User identity and email, and membership identity and endpoints, have no mutation operations.
 
-Disabling a user does not rewrite memberships. Deactivating one membership does not disable the user or other memberships. Suspending a tenant does not rewrite users. These independent states preserve context and avoid destructive cascades. Future access decisions must evaluate the relevant user, tenant, membership, and permissions together; FIELD-004 enforces global user state for authentication; tenant, membership, and permission enforcement remain deferred.
+Disabling a user does not rewrite memberships. Deactivating one membership does not disable the user or other memberships. Suspending a tenant does not rewrite users. These independent states preserve context and avoid destructive cascades. Future access decisions must evaluate the relevant user, tenant, membership, and permissions together; FIELD-004 enforces global user state for authentication; FIELD-005–008 enforce tenant, membership, and role checks for the existing workspace operations.
 
 ACTIVE does not mean authenticated, verified, invited, or authorized. Status enums plus check constraints are sufficient; configurable lookup tables or PostgreSQL enums add no needed flexibility. Invitation/PENDING states, provisioning workflows, and offboarding retention are deferred until their requirements exist.
 
@@ -92,7 +92,7 @@ Membership lookup includes both tenant and user IDs, but accepting IDs is not au
 
 When a future tenant-owned record needs to reference a tenant member, `(tenant_id, user_id)` can reference the unique Membership pair. A reference to users.id alone proves global existence, not membership in that business. Such a foreign key still does not prove active membership or permission. Add those associations and checks with their actual domain features.
 
-Future business roles belong in tenant scope, not a single User.role field. Platform authority remains separate and must never be inferred from zero memberships or a null tenant. No owner role, last-owner invariant, password/hash, token, session, identity-provider subject, or RBAC tables are added now.
+Business roles belong in tenant scope, not a single User.role field. FIELD-005 adds BUSINESS_OWNER, DISPATCHER, and TECHNICIAN on memberships; V5 backfills existing records as TECHNICIAN. Platform authority remains separate and must never be inferred from zero memberships or a null tenant. FIELD-003 originally added none of these authentication/authorization mechanisms. FIELD-004 adds password sessions; FIELD-005–008 add membership roles and a last-active-owner-membership invariant. Identity-provider subjects and configurable RBAC tables remain deferred.
 
 ## Verification
 
