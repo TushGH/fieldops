@@ -28,7 +28,7 @@ Use one `public.tenants` table in the existing shared PostgreSQL database. A sch
 
 The application supplies IDs, initial status, timestamps, and initial version. These are server-controlled values, not client-selected persistence metadata. `version` is concurrency metadata, not audit history; persistence increments it when updating the row. The Java version is nullable only before persistence so Spring Data recognizes a new entity with an assigned UUID; Hibernate initializes the persisted version to zero.
 
-Do not initially add owner IDs, contact addresses, subscription plans, tax details, generic JSON settings, or soft-delete fields. Ownership roles belong in the future membership design. Add business timezone and currency when scheduling and billing need them, with explicit configuration rather than guessed defaults.
+Do not initially add owner IDs, contact addresses, subscription plans, tax details, generic JSON settings, or soft-delete fields. FIELD-003 adds memberships linking global users to tenants; ownership roles remain deferred. See the [user and membership design](user-membership-domain.md). Add business timezone and currency when scheduling and billing need them, with explicit configuration rather than guessed defaults.
 
 ### Constraints
 
