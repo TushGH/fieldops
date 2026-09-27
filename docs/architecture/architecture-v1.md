@@ -58,6 +58,8 @@ Start synchronously. An application use case may coordinate multiple modules in 
 
 Use one shared PostgreSQL database with tenant-aware business tables. A tenant is a service business; customer, technician, work-order, appointment, invoice, and payment records belong to that business. Shared identity and platform records need separately defined ownership rather than blindly adding `tenant_id` everywhere.
 
+FIELD-001 proposes one Tenant concept without a separate Business entity, UUID v4 identity, a stable unique slug, ACTIVE/SUSPENDED status, audit timestamps, and optimistic locking. The [tenant domain design](tenant-domain.md) specifies the schema, constraints, indexes, and future ownership rules; [ADR 0003](../adr/0003-tenant-domain-model.md) records the tradeoffs. This is a proposed design, not implemented tenancy; persistence belongs to FIELD-002.
+
 Derive the effective tenant from authenticated identity and validated membership. If a user can select among tenants, validate that selection server-side before establishing context. A submitted `tenant_id`, guessed resource ID, or hidden frontend button is never sufficient authorization.
 
 Scope reads, writes, searches, and relationship lookups by tenant. Use tenant-scoped unique constraints and, where appropriate, composite foreign keys to prevent cross-tenant associations. Background jobs and future events must carry and validate explicit tenant context because they cannot assume an HTTP session.
