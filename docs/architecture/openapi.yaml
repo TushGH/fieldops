@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: FieldOps API
-  version: 0.1.0
-  description: Phase 1 application health contract. Business APIs are not implemented.
+  version: 0.2.0
+  description: Application health and session authentication. Tenant and role authorization and business APIs are not implemented.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -27,3 +27,137 @@ paths:
                   status:
                     type: string
                     const: UP
+  /api/v1/auth/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: Obtain a CSRF token and anonymous session cookie
+      security: []
+      responses:
+        '200':
+          description: Uncached CSRF header name and masked token; fetch again after login, failed login, or logout.
+          headers:
+            Set-Cookie:
+              description: FIELDOPS_SESSION cookie if a session was created. HttpOnly; SameSite=Lax; Secure by default.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [headerName, token]
+                properties:
+                  headerName:
+                    type: string
+                    const: X-CSRF-TOKEN
+                  token:
+                    type: string
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Authenticate with an email and password
+      description: Requires the anonymous session cookie and CSRF header from GET /api/v1/auth/csrf. Uses form encoding, not JSON. No tenant or role is selected.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  description: Sent unchanged. Values exceeding 72 UTF-8 bytes cannot authenticate.
+      responses:
+        '204':
+          description: Authenticated; session ID rotated. Fetch a fresh CSRF token and GET /api/v1/auth/me.
+          headers:
+            Set-Cookie:
+              description: Rotated FIELDOPS_SESSION cookie.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RequestRejected'
+  /api/v1/auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Read the authenticated global user profile
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Uncached profile with no credentials, roles, memberships, or tenant claims.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, displayName, email]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  displayName:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Invalidate the current session and expire its cookie
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '204':
+          description: Session invalidated. Obtain a fresh anonymous CSRF token before logging in again.
+        '403':
+          $ref: '#/components/responses/RequestRejected'
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: FIELDOPS_SESSION
+      description: Anonymous for CSRF/login; authenticated for current-user requests. Managed by the browser, never copied into local storage.
+    CsrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: Token obtained for the same session from GET /api/v1/auth/csrf.
+  schemas:
+    AuthenticationError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [UNAUTHENTICATED, REQUEST_REJECTED]
+        message:
+          type: string
+  responses:
+    Unauthenticated:
+      description: Missing/expired session, inactive account, or invalid credentials. Unknown and unprovisioned users produce the same login failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationError'
+    RequestRejected:
+      description: Missing or invalid CSRF protection; not a business permission decision.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationError'

@@ -1,6 +1,6 @@
 # Architecture v1: modular monolith
 
-Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; global users and tenant memberships are implemented in FIELD-003. Other domain capabilities below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
+Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; global users and tenant memberships are implemented in FIELD-003. FIELD-004 adds backend session authentication. Other domain capabilities below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
 
 ## System shape
 
@@ -60,7 +60,7 @@ Use one shared PostgreSQL database with tenant-aware business tables. A tenant i
 
 FIELD-001 defines one Tenant concept without a separate Business entity, UUID v4 identity, a stable unique slug, ACTIVE/SUSPENDED status, audit timestamps, and optimistic locking. The [tenant domain design](tenant-domain.md) specifies the schema, constraints, indexes, and future ownership rules; [ADR 0003](../adr/0003-tenant-domain-model.md) records the tradeoffs. FIELD-002 implements tenant persistence and internal creation/retrieval use cases. It does not implement authenticated tenancy or expose tenant HTTP endpoints.
 
-FIELD-003 adds global User records in `identity` and Membership records in `tenant`. A user may belong to multiple tenants, with one unique relationship per tenant/user pair and independent lifecycle states. See the [user and membership design](user-membership-domain.md) and [ADR 0004](../adr/0004-users-and-tenant-memberships.md). These records do not authenticate users or grant permissions.
+FIELD-003 adds global User records in `identity` and Membership records in `tenant`. A user may belong to multiple tenants, with one unique relationship per tenant/user pair and independent lifecycle states. See the [user and membership design](user-membership-domain.md) and [ADR 0004](../adr/0004-users-and-tenant-memberships.md). These records alone do not authenticate users or grant permissions. FIELD-004 adds local password credentials and global user session authentication; it still grants no tenant permissions.
 
 Derive the effective tenant from authenticated identity and validated membership. If a user can select among tenants, validate that selection server-side before establishing context. A submitted `tenant_id`, guessed resource ID, or hidden frontend button is never sufficient authorization.
 
@@ -75,6 +75,12 @@ Use PostgreSQL as the source of truth and Flyway for every schema change. Releas
 Use foreign keys, not-null constraints, and tenant-scoped uniqueness as appropriate. Choose indexes from actual access patterns. Enforce scheduling and financial invariants transactionally, including concurrent requests; a UI availability check alone cannot prevent double booking. Select and test the specific concurrency strategy during the scheduling milestone.
 
 Work-order lifecycle changes occur through explicit operations such as assign, start, complete, and cancel. The proposed progression is `REQUESTED → CONFIRMED → SCHEDULED → ASSIGNED → EN_ROUTE → IN_PROGRESS → COMPLETED → INVOICED → PAID`, with cancellation from defined states. This is a product starting point, not a fully specified state machine. Each milestone must define legal transitions, rescheduling behavior, and the relationship to appointment and financial states before implementing them.
+
+## Authentication
+
+FIELD-004 uses Spring Security email/password authentication and instance-local servlet sessions. CSRF protects login/logout, login rotates the session ID, and cookies are HttpOnly, SameSite=Lax, and Secure by default. A per-request global account-state check rejects disabled users with existing sessions. Password hashes are separate from profiles, and credential provisioning is an internal use case. See the [authentication contract](authentication.md) and [ADR 0005](../adr/0005-session-authentication.md).
+
+This implements global authentication only. The role/resource and trusted tenant-context rules above remain requirements for later work, not implemented permissions. No business or account-provisioning endpoints are exposed.
 
 ## API and frontend
 
@@ -96,10 +102,10 @@ Kafka is excluded from the first MVP. Redis needs a demonstrated caching, rate-l
 
 ## Current implementation boundary
 
-`com.fieldops.tenant` now contains a JPA-mapped domain entity with validation and explicit lifecycle operations, a narrow Spring Data repository, and a transactional application service returning immutable snapshots. Using one annotated domain entity avoids duplicate persistence models and mapping code for this small module. V1 establishes migration history; V2 creates the tenant table. FIELD-003 adds `identity` user persistence and tenant-owned memberships through V3, with UUID references, global email uniqueness, and pair uniqueness. Internal services return snapshots and expose no HTTP endpoints. The remaining module map is intended evolution, not a list of implemented packages.
+`com.fieldops.tenant` now contains a JPA-mapped domain entity with validation and explicit lifecycle operations, a narrow Spring Data repository, and a transactional application service returning immutable snapshots. Using one annotated domain entity avoids duplicate persistence models and mapping code for this small module. V1 establishes migration history; V2 creates the tenant table. FIELD-003 adds `identity` user persistence and tenant-owned memberships through V3, with UUID references, global email uniqueness, and pair uniqueness. Internal services return snapshots and expose no HTTP endpoints. FIELD-004 adds V4 password credentials and session-authentication endpoints in identity. The remaining module map is intended evolution, not a list of implemented packages.
 
 The Next.js development page uses a same-origin `/api/health` route to call Spring's `/api/v1/health` with a bounded timeout and no caching. This route is a presentation-layer adapter, not another business service. The [OpenAPI contract](openapi.yaml) describes the application endpoint. `/actuator/health` separately reports aggregate health including PostgreSQL without exposing component details.
 
-Applications run on the host with PostgreSQL in Compose. Local listeners bind to loopback by default. Root environment variables configure Compose and the backend; a server-only frontend environment variable selects the API origin. There is no authentication or implemented multi-tenancy yet. Those are Phase 2 responsibilities, and must precede business APIs.
+Applications run on the host with PostgreSQL in Compose. Local listeners bind to loopback by default. Root environment variables configure Compose and the backend; a server-only frontend environment variable selects the API origin. Backend session authentication is implemented. Tenant resolution, role/resource authorization, and enforced multi-tenancy remain Phase 2 responsibilities and must precede business APIs.
 
 Tests retain the requested JUnit 5 and boot the application directly because Spring 7's test extension requires JUnit 6. The frontend uses the supported Webpack compiler after Turbopack worker binding failed in the initial environment. Neither choice changes the modular-monolith decision.

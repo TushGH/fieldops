@@ -20,7 +20,7 @@ Planned capabilities include tenant isolation, role-based access, customer and t
 
 ## Current status
 
-**Phase 2: Tenant, user, and membership persistence (FIELD-002/003).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Authentication, authorization, tenant isolation, and business workflow APIs are not implemented. The application is a local development foundation, not a production release.
+**Phase 2: Persistence and backend authentication (FIELD-002–004).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Authorization, tenant isolation, login UI, and business workflow APIs are not implemented. The application is a local development foundation, not a production release.
 
 [PRODUCT.md](docs/product/PRODUCT.md) defines the planned product. [ROADMAP.md](docs/ROADMAP.md) distinguishes completed foundation work from the next identity and multi-tenancy phase.
 
@@ -35,7 +35,7 @@ Planned capabilities include tenant isolation, role-based access, customer and t
 | Quality | ESLint, TypeScript checks, backend and frontend builds, GitHub Actions |
 | Local infrastructure | Docker Compose runs PostgreSQL; applications run on the host |
 
-Spring Security, richer frontend libraries, and business modules from the planned stack will be introduced when their features need them. Next.js uses its supported Webpack compiler for development and production builds because Turbopack's worker port binding failed in the initial development environment. ESLint 9 is retained to match the peer dependency range of Next.js's React/import/accessibility plugins; revisit this when those plugins support ESLint 10.
+Spring Security provides backend session authentication. Richer frontend libraries and other business modules will be introduced when their features need them. Next.js uses its supported Webpack compiler for development and production builds because Turbopack's worker port binding failed in the initial development environment. ESLint 9 is retained to match the peer dependency range of Next.js's React/import/accessibility plugins; revisit this when those plugins support ESLint 10.
 
 ## Repository layout
 
@@ -106,7 +106,7 @@ cd apps/api
 
 Compose reads `.env` automatically, but Spring Boot does not; sourcing it exports the backend settings. Run these commands again in each new backend terminal. The backend defaults to `127.0.0.1:8080`.
 
-On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. Existing databases advance through these migrations without changing V1 or V2. Hibernate uses `ddl-auto=validate` and does not modify the schema.
+On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. V4 adds separate password credentials without assigning passwords to existing users. Existing databases advance through these migrations without changing V1–V3. Hibernate uses `ddl-auto=validate` and does not modify the schema.
 
 ### 4. Start the frontend
 
@@ -148,6 +148,7 @@ The browser requests `/api/health` from Next.js. The server forwards to the fixe
 | `POSTGRES_PORT` | Root `.env` | Host database port; default `5432` |
 | `DATABASE_URL` | Root `.env` | Backend JDBC URL; align database name and port with Compose |
 | `API_PORT` | Root `.env` | Backend port; default `8080` |
+| `SESSION_COOKIE_SECURE` | Root `.env` | Defaults to `true`; set `false` only for local HTTP authentication |
 | `API_BASE_URL` | `apps/web/.env.local` | Next.js server's backend URL; default `http://127.0.0.1:8080` |
 
 If port 5432 is occupied, set `POSTGRES_PORT=55432` and `DATABASE_URL=jdbc:postgresql://localhost:55432/fieldops` in `.env`, then rerun Compose and restart the backend with the new environment. If changing `API_PORT`, update the frontend's `API_BASE_URL` and restart it. Set `PORT=3001 npm run dev` if the web port is occupied.
@@ -157,6 +158,14 @@ Database initialization variables apply only to a new PostgreSQL data volume. Ch
 If the page says API unavailable, check the backend logs and direct health URL first. If Maven reports an unsupported release, check `./mvnw --version` uses Java 25. If Testcontainers cannot connect, confirm `docker info` succeeds; tests require Docker and do not silently skip when it is unavailable.
 
 Stop the frontend and backend with Ctrl+C. Stop the database from the repository root with `docker compose down`; this retains its data volume.
+
+## Backend authentication
+
+The [authentication contract](docs/architecture/authentication.md) documents CSRF token retrieval, form-encoded login, current-user retrieval, and POST logout. The API uses an HttpOnly session cookie; no JWT or browser token storage is involved. Tenant and role authorization remain deferred.
+
+Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. Public signup, operator onboarding tooling, password recovery, and a frontend login screen are separate work. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
+
+For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.env` (new copies of `.env.example` already include it), export it, and restart the API. Keep the default `true` for HTTPS deployments. Sessions expire after 30 minutes of inactivity and are lost on backend restart. See [ADR 0005](docs/adr/0005-session-authentication.md) for deployment limits and alternatives.
 
 ## Tests and builds
 

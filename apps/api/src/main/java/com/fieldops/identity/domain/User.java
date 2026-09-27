@@ -89,7 +89,7 @@ public class User {
         return normalized;
     }
 
-    private static String normalizeEmail(String value) {
+    public static String normalizeEmail(String value) {
         if (value == null) throw new IllegalArgumentException("Email is required");
         var normalized = EDGE_WHITESPACE.matcher(value).replaceAll("");
         // FieldOps starts with ASCII email addresses. Bean Validation validates

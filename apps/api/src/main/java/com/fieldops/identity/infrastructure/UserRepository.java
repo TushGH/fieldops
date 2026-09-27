@@ -9,4 +9,5 @@ import org.springframework.data.repository.Repository;
 public interface UserRepository extends Repository<User, UUID> {
     User saveAndFlush(User user);
     Optional<User> findById(UUID id);
+    Optional<User> findByEmail(String email);
 }
