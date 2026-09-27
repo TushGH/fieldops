@@ -34,6 +34,7 @@ class ApplicationIntegrationTest {
     static void startApplication() {
         context = SpringApplication.run(FieldOpsApplication.class,
                 "--server.port=0",
+                "--server.servlet.session.cookie.secure=true",
                 "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                 "--spring.datasource.username=" + POSTGRES.getUsername(),
                 "--spring.datasource.password=" + POSTGRES.getPassword());
@@ -64,7 +65,7 @@ class ApplicationIntegrationTest {
         var flyway = context.getBean(Flyway.class);
         assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT version()", String.class)).startsWith("PostgreSQL 17.");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success",
@@ -80,6 +81,14 @@ class ApplicationIntegrationTest {
         var body = context.getBean(ObjectMapper.class).readTree(response.body());
         assertThat(body.path("status").asText()).isEqualTo("UP");
         assertThat(body.has("components")).isFalse();
+    }
+
+    @Test
+    void usesSecureHttpOnlySessionCookiesWhenConfiguredForHttps() throws Exception {
+        var response = get("/api/v1/auth/csrf");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().allValues("set-cookie").toString())
+                .contains("Secure", "HttpOnly", "SameSite=Lax");
     }
 
     private HttpResponse<String> get(String path) throws Exception {

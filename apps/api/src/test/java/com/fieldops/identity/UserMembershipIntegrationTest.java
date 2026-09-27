@@ -80,7 +80,7 @@ class UserMembershipIntegrationTest {
     @Test
     void upgradesV2AndSupportsUsersWithZeroOneOrMultipleTenants() {
         var flyway = context.getBean(Flyway.class);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
         flyway.validate();
         assertThat(tenants.findById(EXISTING_TENANT)).get().extracting(t -> t.name()).isEqualTo("Existing Business");
         var user = users.create(" Alex ", " Alex+Work@Example.COM ");

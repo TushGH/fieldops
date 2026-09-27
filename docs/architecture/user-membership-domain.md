@@ -1,10 +1,10 @@
 # User and membership domain
 
-Status: implemented for [FIELD-003](https://github.com/TushGH/fieldops/issues/3). This establishes identity records and relationships, not authentication or authorization. See [ADR 0004](../adr/0004-users-and-tenant-memberships.md) for the decision and alternatives.
+Status: implemented for [FIELD-003](https://github.com/TushGH/fieldops/issues/3). FIELD-003 establishes identity records and relationships. FIELD-004 adds [session authentication](authentication.md); authorization remains deferred. See [ADR 0004](../adr/0004-users-and-tenant-memberships.md) for the decision and alternatives.
 
 ## Domain boundaries
 
-- **User:** a global FieldOps identity/profile, owned by `identity`. It has no tenant_id and is not yet a login account or verified identity.
+- **User:** a global FieldOps identity/profile, owned by `identity`. It has no tenant_id. FIELD-004 optionally adds a separate local password credential; a profile alone remains neither a login credential nor a verified identity.
 - **Tenant:** one service business and its business-data ownership boundary, owned by `tenant`. The [existing Tenant design](tenant-domain.md) is unchanged.
 - **Membership:** the relationship between one user and one tenant, owned by `tenant`. It has its own identity and lifecycle and currently contains no roles or permissions.
 
@@ -56,13 +56,13 @@ The entire address is treated as case-insensitive as an explicit FieldOps produc
 
 Global uniqueness avoids duplicate identities when joining another tenant. Tenant-scoped uniqueness would instead permit separate profiles for the same person; nonunique emails would require another account-identification policy when authentication arrives. Canonical storage avoids a citext extension or duplicate normalized-email column. Disabled users retain their email reservation.
 
-Email is unverified contact data, not proof of identity. There is no email lookup or login endpoint, automatic invitation, account linking, email-change operation, or verified flag. Future email changes and external identity linking require ownership verification and authorization design. External authentication identifiers must not replace the stable User UUID.
+Email is unverified contact data, not proof of identity. FIELD-004 adds email lookup internally for password login; there is no public email directory, automatic invitation, account linking, email-change operation, or verified flag. Future email changes and external identity linking require ownership verification and authorization design. External authentication identifiers must not replace the stable User UUID.
 
 ## Lifecycle and use cases
 
 Users start ACTIVE and support explicit disable(), reactivate(), and rename() domain operations. Memberships start ACTIVE and support deactivate() and reactivate(). Repeating the current status is a no-op. User identity and email, and membership identity and endpoints, have no mutation operations.
 
-Disabling a user does not rewrite memberships. Deactivating one membership does not disable the user or other memberships. Suspending a tenant does not rewrite users. These independent states preserve context and avoid destructive cascades. Future access decisions must evaluate the relevant user, tenant, membership, and permissions together; none of that enforcement exists here.
+Disabling a user does not rewrite memberships. Deactivating one membership does not disable the user or other memberships. Suspending a tenant does not rewrite users. These independent states preserve context and avoid destructive cascades. Future access decisions must evaluate the relevant user, tenant, membership, and permissions together; FIELD-004 enforces global user state for authentication; tenant, membership, and permission enforcement remain deferred.
 
 ACTIVE does not mean authenticated, verified, invited, or authorized. Status enums plus check constraints are sufficient; configurable lookup tables or PostgreSQL enums add no needed flexibility. Invitation/PENDING states, provisioning workflows, and offboarding retention are deferred until their requirements exist.
 
@@ -88,7 +88,7 @@ Do not add name, status, or audit-time indexes before queries need them. Future 
 
 User is global profile data. A tenant must not eventually be allowed to edit a global identity or see other memberships merely because that user belongs to it. Future tenant-specific display details belong on a tenant-owned profile if required.
 
-Membership lookup includes both tenant and user IDs, but accepting IDs is not authorization. This issue exposes no HTTP endpoints or authenticated tenant context. Future callers must establish trusted context and fail closed; they must not treat record existence or ACTIVE status as permission.
+Membership lookup includes both tenant and user IDs, but accepting IDs is not authorization. FIELD-003 exposes no HTTP endpoints or authenticated tenant context; FIELD-004 adds global-user authentication endpoints only. Future callers must establish trusted context and fail closed; they must not treat record existence or ACTIVE status as permission.
 
 When a future tenant-owned record needs to reference a tenant member, `(tenant_id, user_id)` can reference the unique Membership pair. A reference to users.id alone proves global existence, not membership in that business. Such a foreign key still does not prove active membership or permission. Add those associations and checks with their actual domain features.
 
