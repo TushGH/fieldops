@@ -1,6 +1,6 @@
 # Tenant access and isolation
 
-Status: FIELD-005 through FIELD-008 implemented for existing Tenant and Membership data. See [ADR 0006](../adr/0006-tenant-context-and-access-control.md). This does not implement customer, technician, work-order, platform-administration, onboarding, or frontend features.
+Status: FIELD-005 through FIELD-008 implemented for existing Tenant and Membership data. See [ADR 0006](../adr/0006-tenant-context-and-access-control.md). FIELD-009/010 subsequently add [business onboarding and frontend login](business-onboarding.md). Customer, technician, work-order, and platform-administration features remain unimplemented.
 
 ## Membership roles
 
@@ -13,7 +13,7 @@ One role belongs to each membership, not the global User or login session. The i
 | List/read selected tenant memberships | Yes | No | No |
 | Change a membership role | Yes | No | No |
 | Deactivate/reactivate a membership | Yes | No | No |
-| Create a tenant/user/membership through HTTP | No | No | No |
+| Create or assign existing users/memberships through workspace HTTP APIs | No | No | No |
 | Read another tenant's records | No | No | No |
 
 Dispatcher and technician permissions are deliberately identical for the current metadata endpoints. Their operational permissions arrive with their actual product features. Owner status in one tenant grants nothing in another; the same user can have different roles in different businesses.

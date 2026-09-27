@@ -1,6 +1,6 @@
 # Architecture v1: modular monolith
 
-Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; global users and tenant memberships are implemented in FIELD-003. FIELD-004 adds backend session authentication; FIELD-005–008 add membership roles, validated request-scoped tenant context, and isolation for current tenant/membership APIs. Other domain capabilities below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
+Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; global users and tenant memberships are implemented in FIELD-003. FIELD-004 adds backend session authentication; FIELD-005–008 add membership roles, validated request-scoped tenant context, and isolation for current tenant/membership APIs. FIELD-009/010 add direct business signup and login UI; see [onboarding](business-onboarding.md). Other domain capabilities below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
 
 ## System shape
 

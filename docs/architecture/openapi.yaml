@@ -1,11 +1,102 @@
 openapi: 3.1.0
 info:
   title: FieldOps API
-  version: 0.3.0
-  description: Application health, session authentication, and role-checked tenant workspace APIs. Customer and work-order APIs remain unimplemented.
+  version: 0.4.0
+  description: Application health, business onboarding, session authentication, and role-checked tenant workspace APIs. Customer and work-order APIs remain unimplemented.
 servers:
   - url: http://127.0.0.1:8080
 paths:
+  /api/v1/onboarding:
+    post:
+      operationId: onboardBusiness
+      summary: Create a new business and new owner atomically
+      description: Requires an anonymous session cookie and CSRF token. Creates a new user only; never links an existing email. Server assigns BUSINESS_OWNER to the new business. Signup does not log in the owner.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [businessName, slug, ownerName, email, password]
+              properties:
+                businessName:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                slug:
+                  type: string
+                  minLength: 3
+                  maxLength: 63
+                  pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+                  description: Permanent unique business identifier; canonicalized to lowercase.
+                ownerName:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  description: Canonical ASCII email; globally unique and not verified by signup.
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+                  minLength: 15
+                  maxLength: 72
+                  description: At least 15 Unicode code points and at most 72 UTF-8 bytes; never normalized.
+      responses:
+        '201':
+          description: Business, owner, credential, and owner membership committed. No response body. Sign in through the existing login endpoint.
+        '400':
+          description: Invalid input or unknown fields; nothing persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantError'
+        '403':
+          $ref: '#/components/responses/RequestRejected'
+        '409':
+          description: ONBOARDING_CONFLICT; duplicate slug or canonical email. No distinction is exposed and nothing from this request persists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingConflict'
+  /api/v1/businesses:
+    get:
+      operationId: getMyBusinesses
+      summary: List the signed-in user's active businesses
+      description: Derived solely from the session identity, without a tenant selection. Filters inactive memberships and suspended businesses. Ordered by name and ID; an empty list grants no platform authority.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Uncached business summaries, with only the current user's role in each business.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [id, name, slug, role]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    slug:
+                      type: string
+                    role:
+                      type: string
+                      enum: [BUSINESS_OWNER, DISPATCHER, TECHNICIAN]
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
   /api/v1/health:
     get:
       operationId: getApplicationHealth
@@ -375,6 +466,16 @@ components:
       name: X-CSRF-TOKEN
       description: Token obtained for the same session from GET /api/v1/auth/csrf.
   schemas:
+    OnboardingConflict:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          const: ONBOARDING_CONFLICT
+        message:
+          type: string
     MembershipRole:
       type: string
       enum: [BUSINESS_OWNER, DISPATCHER, TECHNICIAN]
