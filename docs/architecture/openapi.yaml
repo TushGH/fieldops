@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: FieldOps API
-  version: 0.2.0
-  description: Application health and session authentication. Tenant and role authorization and business APIs are not implemented.
+  version: 0.3.0
+  description: Application health, session authentication, and role-checked tenant workspace APIs. Customer and work-order APIs remain unimplemented.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -125,7 +125,244 @@ paths:
           description: Session invalidated. Obtain a fresh anonymous CSRF token before logging in again.
         '403':
           $ref: '#/components/responses/RequestRejected'
+  /api/v1/tenant/context:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    get:
+      operationId: getTenantContext
+      summary: Read validated tenant selection and role
+      description: Requires an active membership and active selected tenant.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantContext'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+  /api/v1/tenant:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    get:
+      operationId: getSelectedTenant
+      summary: Read selected tenant metadata
+      description: Requires an active membership and active selected tenant.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+    patch:
+      operationId: renameSelectedTenant
+      summary: Rename selected tenant
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameTenant'
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '409':
+          $ref: '#/components/responses/TenantConflict'
+  /api/v1/tenant/memberships:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    get:
+      operationId: listTenantMemberships
+      summary: List selected tenant memberships
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+      parameters:
+        - in: query
+          name: page
+          schema: {type: integer, minimum: 0, default: 0}
+        - in: query
+          name: size
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPage'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+  /api/v1/tenant/memberships/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - $ref: '#/components/parameters/MembershipId'
+    get:
+      operationId: getTenantMembership
+      summary: Read selected tenant membership
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+  /api/v1/tenant/memberships/{id}/role:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - $ref: '#/components/parameters/MembershipId'
+    put:
+      operationId: changeMembershipRole
+      summary: Change a membership role
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeMembershipRole'
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '409':
+          $ref: '#/components/responses/TenantConflict'
+  /api/v1/tenant/memberships/{id}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - $ref: '#/components/parameters/MembershipId'
+    post:
+      operationId: deactivateMembership
+      summary: Deactivate a membership
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '409':
+          $ref: '#/components/responses/TenantConflict'
+  /api/v1/tenant/memberships/{id}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - $ref: '#/components/parameters/MembershipId'
+    post:
+      operationId: reactivateMembership
+      summary: Reactivate a membership
+      description: Requires BUSINESS_OWNER in the selected tenant.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '200':
+          description: Tenant-scoped result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/TenantBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantDenied'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '409':
+          $ref: '#/components/responses/TenantConflict'
 components:
+  parameters:
+    SelectedTenant:
+      in: header
+      name: X-Tenant-ID
+      required: true
+      description: One canonical tenant UUID. Validated against authenticated user and active membership; never sufficient authority by itself.
+      schema: {type: string, format: uuid}
+    MembershipId:
+      in: path
+      name: id
+      required: true
+      description: Membership UUID searched only within the validated tenant.
+      schema: {type: string, format: uuid}
   securitySchemes:
     SessionCookie:
       type: apiKey
@@ -138,6 +375,77 @@ components:
       name: X-CSRF-TOKEN
       description: Token obtained for the same session from GET /api/v1/auth/csrf.
   schemas:
+    MembershipRole:
+      type: string
+      enum: [BUSINESS_OWNER, DISPATCHER, TECHNICIAN]
+    TenantContext:
+      type: object
+      additionalProperties: false
+      required: [userId, tenantId, membershipId, role]
+      properties:
+        userId: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid}
+        membershipId: {type: string, format: uuid}
+        role:
+          $ref: '#/components/schemas/MembershipRole'
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug, status, createdAt, updatedAt, version]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        status: {type: string, enum: [ACTIVE, SUSPENDED]}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, format: int64}
+    Membership:
+      type: object
+      additionalProperties: false
+      required: [id, tenantId, userId, status, role, createdAt, updatedAt, version]
+      properties:
+        id: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        status: {type: string, enum: [ACTIVE, INACTIVE]}
+        role:
+          $ref: '#/components/schemas/MembershipRole'
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, format: int64}
+    MembershipPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        page: {type: integer}
+        size: {type: integer}
+        totalElements: {type: integer, format: int64}
+    RenameTenant:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+    ChangeMembershipRole:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/MembershipRole'
+    TenantError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
     AuthenticationError:
       type: object
       additionalProperties: false
@@ -149,6 +457,30 @@ components:
         message:
           type: string
   responses:
+    TenantBadRequest:
+      description: Missing or malformed tenant selection, invalid payload, or invalid pagination.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantError'
+    TenantDenied:
+      description: Inactive or unrelated tenant/membership, insufficient tenant role, or CSRF failure. No distinction between nonexistent and unrelated tenants.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantError'
+    TenantNotFound:
+      description: No such resource in the selected tenant. Foreign resource IDs produce the same response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantError'
+    TenantConflict:
+      description: Last active owner membership must be preserved, or a concurrent modification occurred.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantError'
     Unauthenticated:
       description: Missing/expired session, inactive account, or invalid credentials. Unknown and unprovisioned users produce the same login failure.
       content:

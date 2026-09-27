@@ -31,6 +31,10 @@ public class Membership {
     @Column(nullable = false, length = 20)
     private MembershipStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private MembershipRole role;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -46,15 +50,26 @@ public class Membership {
     }
 
     public static Membership create(UUID tenantId, UUID userId) {
+        return create(tenantId, userId, MembershipRole.TECHNICIAN);
+    }
+
+    public static Membership create(UUID tenantId, UUID userId, MembershipRole role) {
         var membership = new Membership();
         membership.id = UUID.randomUUID();
         membership.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
         membership.userId = Objects.requireNonNull(userId, "User ID is required");
         membership.status = MembershipStatus.ACTIVE;
+        membership.role = Objects.requireNonNull(role, "Membership role is required");
         membership.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         membership.updatedAt = membership.createdAt;
         return membership;
     }
+
+    public void assignRole(MembershipRole role) {
+        this.role = Objects.requireNonNull(role, "Membership role is required");
+    }
+
+    public MembershipRole getRole() { return role; }
 
     public void deactivate() {
         status = MembershipStatus.INACTIVE;

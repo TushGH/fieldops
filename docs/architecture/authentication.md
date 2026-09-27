@@ -1,6 +1,6 @@
 # Authentication
 
-Status: FIELD-004 backend authentication implemented. See [ADR 0005](../adr/0005-session-authentication.md) for decisions and tradeoffs. Authorization, tenant selection, and frontend login screens remain unimplemented.
+Status: FIELD-004 backend authentication implemented. See [ADR 0005](../adr/0005-session-authentication.md) for decisions and tradeoffs. FIELD-005–008 add [tenant selection and membership-role authorization](tenant-access.md); frontend login remains unimplemented.
 
 ## HTTP contract
 
@@ -29,7 +29,7 @@ The session cookie is named FIELDOPS_SESSION, has HttpOnly and SameSite=Lax, and
 
 For local HTTP development, set SESSION_COOKIE_SECURE=false in the root .env and export it before starting the API. The .env.example contains this local setting. HTTPS deployments must leave the default true or explicitly set true; configure TLS termination and trusted proxy handling for the deployment topology. This setting does not itself provide HTTPS.
 
-Sessions are in-process and instance-local; backend restarts end sessions. No Redis, shared session store, or JWT infrastructure is introduced. A missing or disabled global User invalidates an existing session on its next request, including one created before the status change. Tenant or Membership states are not evaluated in this issue.
+Sessions are in-process and instance-local; backend restarts end sessions. No Redis, shared session store, or JWT infrastructure is introduced. A missing or disabled global User invalidates an existing session on its next request, including one created before the status change. Global authentication does not evaluate Tenant or Membership states. Tenant workspace requests now validate those states separately under FIELD-005–008.
 
 No cross-origin credential sharing is configured. A future frontend login flow should use a same-origin API deployment/proxy that correctly forwards session cookies and CSRF headers; the current health-only Next.js proxy is not an authentication proxy. Backend clients and tests can use the API origin directly now.
 
@@ -47,7 +47,7 @@ Provisioning inserts a single credential per user. Repeating the operation fails
 
 The session principal is the immutable User UUID with an empty authority collection. Users need no membership to authenticate; absence of memberships does not grant platform administration. Successful login grants no tenant role or business permission.
 
-The filter chain leaves GET application health, GET aggregate Actuator health, and GET CSRF public, and accepts POST login without an existing authenticated session. Other requests require authentication. That boundary is not a substitute for future tenant/resource authorization. No customer, staff-management, tenant-management, or other business endpoints are exposed here.
+The filter chain leaves GET application health, GET aggregate Actuator health, and GET CSRF public, and accepts POST login without an existing authenticated session. Other requests require authentication. That boundary is not a substitute for tenant/resource authorization. FIELD-005–008 add guarded Tenant/Membership workspace endpoints, while customer/work-order and onboarding endpoints remain unimplemented.
 
 Internal User, Membership, and credential application services remain trusted operations without permission checks. Do not expose them directly as administrative endpoints. Keep future role policies, trusted tenant resolution, membership enforcement, and support access deliberate and separate.
 
@@ -55,4 +55,4 @@ Internal User, Membership, and credential application services remain trusted op
 
 PostgreSQL Testcontainers and real HTTP clients exercise migrations, password hashing/provisioning, normalization, successful/failed logins, missing/invalid CSRF, session-ID rotation, logout/replay, failed relogin, disabled-user session invalidation, password byte limits, cookie flags, generic failures, profile data minimization, and public health endpoints. Existing persistence tests still run.
 
-There is no UI or public account-provisioning workflow in this issue. Before exposing login publicly, implement login abuse controls/rate limiting and the operator onboarding/recovery workflow; no account lockout or rate limiter is claimed here. Multi-instance sessions, email verification, password changes, MFA, and authorization remain deferred.
+There is no UI or public account-provisioning workflow in this issue. Before exposing login publicly, implement login abuse controls/rate limiting and the operator onboarding/recovery workflow; no account lockout or rate limiter is claimed here. Multi-instance sessions, email verification, password changes, MFA, and permissions for future business modules remain deferred.

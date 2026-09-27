@@ -20,7 +20,7 @@ Planned capabilities include tenant isolation, role-based access, customer and t
 
 ## Current status
 
-**Phase 2: Persistence and backend authentication (FIELD-002–004).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Authorization, tenant isolation, login UI, and business workflow APIs are not implemented. The application is a local development foundation, not a production release.
+**Phase 2: Authentication, membership roles, and tenant isolation (FIELD-002–008).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Membership roles and tenant-scoped Tenant/Membership APIs are implemented with PostgreSQL isolation tests. Login UI, onboarding, platform administration, and customer/work-order workflows remain unimplemented. The application is a local development foundation, not a production release.
 
 [PRODUCT.md](docs/product/PRODUCT.md) defines the planned product. [ROADMAP.md](docs/ROADMAP.md) distinguishes completed foundation work from the next identity and multi-tenancy phase.
 
@@ -106,7 +106,7 @@ cd apps/api
 
 Compose reads `.env` automatically, but Spring Boot does not; sourcing it exports the backend settings. Run these commands again in each new backend terminal. The backend defaults to `127.0.0.1:8080`.
 
-On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. V4 adds separate password credentials without assigning passwords to existing users. Existing databases advance through these migrations without changing V1–V3. Hibernate uses `ddl-auto=validate` and does not modify the schema.
+On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. V4 adds separate password credentials without assigning passwords to existing users. V5 adds membership roles, backfilling existing memberships as TECHNICIAN without granting owner privileges. Existing databases advance through these migrations without changing released migrations. Hibernate uses `ddl-auto=validate` and does not modify the schema.
 
 ### 4. Start the frontend
 
@@ -161,11 +161,17 @@ Stop the frontend and backend with Ctrl+C. Stop the database from the repository
 
 ## Backend authentication
 
-The [authentication contract](docs/architecture/authentication.md) documents CSRF token retrieval, form-encoded login, current-user retrieval, and POST logout. The API uses an HttpOnly session cookie; no JWT or browser token storage is involved. Tenant and role authorization remain deferred.
+The [authentication contract](docs/architecture/authentication.md) documents CSRF token retrieval, form-encoded login, current-user retrieval, and POST logout. The API uses an HttpOnly session cookie; no JWT or browser token storage is involved. Tenant workspace authorization is described in the [tenant access contract](docs/architecture/tenant-access.md).
 
 Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. Public signup, operator onboarding tooling, password recovery, and a frontend login screen are separate work. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
 
 For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.env` (new copies of `.env.example` already include it), export it, and restart the API. Keep the default `true` for HTTPS deployments. Sessions expire after 30 minutes of inactivity and are lost on backend restart. See [ADR 0005](docs/adr/0005-session-authentication.md) for deployment limits and alternatives.
+
+## Tenant workspace APIs
+
+Send the authenticated session cookie and exactly one `X-Tenant-ID` header for `/api/v1/tenant` and its subpaths. The backend validates active user/membership/tenant state on each request. Roles belong to memberships, so authority in one business grants nothing in another.
+
+All three initial roles can read selected tenant metadata. BUSINESS_OWNER can rename the tenant and list/read/manage its memberships. Mutations require CSRF protection; ownership fields cannot be supplied or reassigned. First-owner creation remains a trusted onboarding operation, not an HTTP shortcut. See the [permission matrix and isolation boundaries](docs/architecture/tenant-access.md) and [ADR 0006](docs/adr/0006-tenant-context-and-access-control.md).
 
 ## Tests and builds
 

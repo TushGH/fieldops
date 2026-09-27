@@ -44,7 +44,7 @@ public class AuthenticationConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/health", "/actuator/health", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
-                        // Authentication boundary only: no role or tenant policies.
+                        // Tenant endpoints additionally enforce context and roles in application services.
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))
                 .httpBasic(AbstractHttpConfigurer::disable)
