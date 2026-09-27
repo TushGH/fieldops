@@ -1,0 +1,29 @@
+openapi: 3.1.0
+info:
+  title: FieldOps API
+  version: 0.1.0
+  description: Phase 1 application health contract. Business APIs are not implemented.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /api/v1/health:
+    get:
+      operationId: getApplicationHealth
+      summary: Check application reachability
+      description: Returns application status without querying PostgreSQL. Use /actuator/health for aggregate dependency health.
+      responses:
+        '200':
+          description: The application is responding.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [application, status]
+                properties:
+                  application:
+                    type: string
+                    const: fieldops-api
+                  status:
+                    type: string
+                    const: UP
