@@ -1,6 +1,6 @@
 # ADR 0003: Model a tenant as one service business
 
-Status: Proposed for FIELD-001; persistence is deferred to FIELD-002.
+Status: Accepted; persistence implemented in FIELD-002. Authentication and tenant isolation remain deferred.
 
 ## Context
 
@@ -35,4 +35,4 @@ The [tenant domain design](../architecture/tenant-domain.md) specifies fields, c
 - Tenant status and constraints alone do not authorize access. Subsequent features must enforce trusted context, suspension, scoped queries, and resource permissions.
 - Composite association constraints may require additional unique indexes on parent tables; add them alongside the relationships that need them.
 - Timestamps are not complete audit history. Actor-based lifecycle auditing awaits authenticated operations.
-- Business details, memberships, timezone, currency, offboarding, and additional statuses remain feature-driven extensions. Persistence arrives through a new Flyway migration, not a change to released V1.
+- Business details, memberships, timezone, currency, offboarding, and additional statuses remain feature-driven extensions. Persistence uses V2, preserving released V1.

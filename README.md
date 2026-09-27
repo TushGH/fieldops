@@ -16,11 +16,11 @@ Small service businesses often coordinate customer requests, technician schedule
 - **Customers:** receive service updates and invoice information; a self-service portal is a future opportunity.
 - **Platform administrators:** manage tenant onboarding and platform operations through explicitly authorized access.
 
-Planned capabilities include tenant isolation, role-based access, customer and technician management, work-order lifecycles, scheduling, invoicing, payment tracking, and notifications. These capabilities are not implemented yet.
+Planned capabilities include tenant isolation, role-based access, customer and technician management, work-order lifecycles, scheduling, invoicing, payment tracking, and notifications. These capabilities are not implemented yet; tenant persistence is their initial data foundation.
 
 ## Current status
 
-**Phase 1: Application Foundation.** The repository now has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migration pipeline, and GitHub Actions validation. There are no business entities, authentication, tenant isolation, or business workflows yet. The application is a local development foundation, not a production release.
+**Phase 2 started: Tenant persistence (FIELD-002).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant module now supports internal creation/retrieval, validated domain operations, and optimistic locking. Authentication, authorization, tenant isolation, and business workflow APIs are not implemented. The application is a local development foundation, not a production release.
 
 [PRODUCT.md](docs/product/PRODUCT.md) defines the planned product. [ROADMAP.md](docs/ROADMAP.md) distinguishes completed foundation work from the next identity and multi-tenancy phase.
 
@@ -106,7 +106,7 @@ cd apps/api
 
 Compose reads `.env` automatically, but Spring Boot does not; sourcing it exports the backend settings. Run these commands again in each new backend terminal. The backend defaults to `127.0.0.1:8080`.
 
-On startup, Flyway executes `V1__verify_migration_pipeline.sql` and records version 1 in `flyway_schema_history`. The migration runs `SELECT 1`; it intentionally creates no business tables. Hibernate uses `ddl-auto=validate` and does not modify the schema.
+On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. Existing databases advance from V1 to V2 without changing V1. Hibernate uses `ddl-auto=validate` and does not modify the schema.
 
 ### 4. Start the frontend
 
@@ -166,7 +166,7 @@ From `apps/api`, with Java 25 and Docker running:
 ./mvnw --batch-mode --no-transfer-progress verify
 ```
 
-This compiles the application, runs three JUnit 5 integration tests, and builds `target/fieldops-api-0.1.0-SNAPSHOT.jar`. Tests create an isolated PostgreSQL container with ephemeral credentials and a random port, prove migration execution/connectivity and real HTTP responses, then close the application and container. They do not require `.env` or the Compose database.
+This compiles the application, runs JUnit 5 domain and PostgreSQL integration tests, and builds `target/fieldops-api-0.1.0-SNAPSHOT.jar`. Tests create an isolated PostgreSQL container with ephemeral credentials and a random port, prove migrations, tenant creation/retrieval, database constraints, concurrent slug uniqueness, optimistic locking, and real health HTTP responses, then close the application and container. They do not require `.env` or the Compose database.
 
 Spring Boot 4's Spring test extension expects JUnit 6 APIs. To retain the explicitly requested JUnit 5, tests use JUnit lifecycle methods to start and close the real `SpringApplication` directly. No framework dependency is downgraded.
 
