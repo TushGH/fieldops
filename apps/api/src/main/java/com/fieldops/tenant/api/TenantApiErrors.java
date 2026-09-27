@@ -1,6 +1,8 @@
 package com.fieldops.tenant.api;
 
 import com.fieldops.tenant.application.TenantAccessException;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -17,7 +19,7 @@ public class TenantApiErrors {
     }
 
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class,
-            MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class})
+            MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class, ConstraintViolationException.class})
     ResponseEntity<ApiError> invalidInput(Exception exception) {
         return ResponseEntity.badRequest().body(new ApiError("INVALID_REQUEST", "The request contains invalid fields."));
     }
@@ -28,4 +30,11 @@ public class TenantApiErrors {
     }
 
     public record ApiError(String code, String message) { }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ApiError> duplicate(DataIntegrityViolationException exception) {
+        // No email directory or database constraint details in a public signup response.
+        return ResponseEntity.status(409).header("Cache-Control", "no-store")
+                .body(new ApiError("ONBOARDING_CONFLICT", "Unable to create this business with those details. Try another business identifier or sign in if you already have an account."));
+    }
 }

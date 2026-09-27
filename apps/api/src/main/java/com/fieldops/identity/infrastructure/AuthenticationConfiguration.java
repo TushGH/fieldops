@@ -43,7 +43,7 @@ public class AuthenticationConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/health", "/actuator/health", "/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/onboarding").permitAll()
                         // Tenant endpoints additionally enforce context and roles in application services.
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))

@@ -20,7 +20,7 @@ Planned capabilities include tenant isolation, role-based access, customer and t
 
 ## Current status
 
-**Phase 2: Authentication, membership roles, and tenant isolation (FIELD-002–008).** The repository has a working Spring Boot backend, Next.js development page, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Membership roles and tenant-scoped Tenant/Membership APIs are implemented with PostgreSQL isolation tests. Login UI, onboarding, platform administration, and customer/work-order workflows remain unimplemented. The application is a local development foundation, not a production release.
+**Phase 2: Business onboarding and login UI (FIELD-002–010).** The repository has a working Spring Boot backend, Next.js login and onboarding UI, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Membership roles and tenant-scoped Tenant/Membership APIs are implemented with PostgreSQL isolation tests. Direct new-business signup, login/logout, and an authenticated business selection/welcome screen are implemented. Platform administration and customer/work-order workflows remain unimplemented. The application is a local development foundation, not a production release.
 
 [PRODUCT.md](docs/product/PRODUCT.md) defines the planned product. [ROADMAP.md](docs/ROADMAP.md) distinguishes completed foundation work from the next identity and multi-tenancy phase.
 
@@ -42,7 +42,7 @@ Spring Security provides backend session authentication. Richer frontend librari
 ```text
 .github/workflows/ci.yml    Backend and frontend validation
 apps/api/                  Spring Boot application and Maven wrapper
-apps/web/                  Next.js development page and health proxy
+apps/web/                  Next.js login and onboarding UI and health proxy
 docker-compose.yml         Local PostgreSQL service
 .env.example               Shared local database/backend configuration example
 services/                  Reserved; no independent services
@@ -118,7 +118,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The development page should report **API connected**. Use **Check connection** to retry. Next.js reads `apps/web/.env.local` automatically.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Choose **Create your business**, complete setup, then sign in with the account you created. Select your business to open its welcome screen. Next.js reads `apps/web/.env.local` automatically.
 
 ### 5. Verify the application
 
@@ -163,7 +163,7 @@ Stop the frontend and backend with Ctrl+C. Stop the database from the repository
 
 The [authentication contract](docs/architecture/authentication.md) documents CSRF token retrieval, form-encoded login, current-user retrieval, and POST logout. The API uses an HttpOnly session cookie; no JWT or browser token storage is involved. Tenant workspace authorization is described in the [tenant access contract](docs/architecture/tenant-access.md).
 
-Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. Public signup, operator onboarding tooling, password recovery, and a frontend login screen are separate work. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
+Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. FIELD-009/010 expose a CSRF-protected signup workflow that creates a new business, new owner, credential, and owner membership atomically. See the [onboarding contract](docs/architecture/business-onboarding.md). Operator tooling and password recovery remain deferred. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
 
 For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.env` (new copies of `.env.example` already include it), export it, and restart the API. Keep the default `true` for HTTPS deployments. Sessions expire after 30 minutes of inactivity and are lost on backend restart. See [ADR 0005](docs/adr/0005-session-authentication.md) for deployment limits and alternatives.
 
@@ -171,7 +171,7 @@ For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.en
 
 Send the authenticated session cookie and exactly one `X-Tenant-ID` header for `/api/v1/tenant` and its subpaths. The backend validates active user/membership/tenant state on each request. Roles belong to memberships, so authority in one business grants nothing in another.
 
-All three initial roles can read selected tenant metadata. BUSINESS_OWNER can rename the tenant and list/read/manage its memberships. Mutations require CSRF protection; ownership fields cannot be supplied or reassigned. First-owner creation remains a trusted onboarding operation, not an HTTP shortcut. See the [permission matrix and isolation boundaries](docs/architecture/tenant-access.md) and [ADR 0006](docs/adr/0006-tenant-context-and-access-control.md).
+All three initial roles can read selected tenant metadata. BUSINESS_OWNER can rename the tenant and list/read/manage its memberships. Mutations require CSRF protection; ownership fields cannot be supplied or reassigned. Signup assigns the first owner only to the newly created business; it cannot grant ownership of an existing business. See the [permission matrix and isolation boundaries](docs/architecture/tenant-access.md) and [ADR 0006](docs/adr/0006-tenant-context-and-access-control.md).
 
 ## Tests and builds
 
@@ -195,7 +195,7 @@ npm test
 npm run build
 ```
 
-`typecheck` generates Next.js route types before checking TypeScript, so it works on a fresh checkout. Six proxy tests cover success, invalid responses, HTTP failure, connection failure, and timeout handling. The frontend build does not require a running backend. To run the production build locally, use `npm start` after `npm run build`.
+`typecheck` generates Next.js route types before checking TypeScript, so it works on a fresh checkout. Proxy tests cover health responses, cookie/CSRF forwarding, route restrictions, and error handling. Run `npm run test:e2e` with Chrome and both local servers running to exercise desktop/mobile onboarding and login; these browser tests create unique test businesses in the connected development database. The frontend build does not require a running backend. To run the production build locally, use `npm start` after `npm run build`.
 
 GitHub Actions runs these backend/frontend checks independently on pushes and pull requests. Backend tests use the runner's Docker daemon through Testcontainers. There is no deployment job. Local equivalents have been executed; the hosted workflow will run once the repository is pushed to GitHub.
 
