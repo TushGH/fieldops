@@ -6,9 +6,17 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class TenantTest {
+    @Test
+    void provisioningCannotBeActivatedByOrdinaryReactivation() {
+        var tenant = Tenant.provision("Invited business", "invited-business");
+        assertThat(tenant.getStatus()).isEqualTo(TenantStatus.PROVISIONING);
+        assertThatThrownBy(tenant::reactivate).isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void normalizesInputAndKeepsIdentityStableThroughLifecycle() {
         var tenant = Tenant.create("\u00a0 ABC Heating \u2003", " ABC-Heating ");

@@ -2,101 +2,10 @@ openapi: 3.1.0
 info:
   title: FieldOps API
   version: 0.4.0
-  description: Application health, business onboarding, session authentication, and role-checked tenant workspace APIs. Customer and work-order APIs remain unimplemented.
+  description: Application health, verified identity onboarding, business invitations, restricted platform provisioning, and tenant workspace APIs.
 servers:
   - url: http://127.0.0.1:8080
 paths:
-  /api/v1/onboarding:
-    post:
-      operationId: onboardBusiness
-      summary: Create a new business and new owner atomically
-      description: Requires an anonymous session cookie and CSRF token. Creates a new user only; never links an existing email. Server assigns BUSINESS_OWNER to the new business. Signup does not log in the owner.
-      security:
-        - SessionCookie: []
-          CsrfHeader: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [businessName, slug, ownerName, email, password]
-              properties:
-                businessName:
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-                slug:
-                  type: string
-                  minLength: 3
-                  maxLength: 63
-                  pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
-                  description: Permanent unique business identifier; canonicalized to lowercase.
-                ownerName:
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-                email:
-                  type: string
-                  format: email
-                  maxLength: 254
-                  description: Canonical ASCII email; globally unique and not verified by signup.
-                password:
-                  type: string
-                  format: password
-                  writeOnly: true
-                  minLength: 15
-                  maxLength: 72
-                  description: At least 15 Unicode code points and at most 72 UTF-8 bytes; never normalized.
-      responses:
-        '201':
-          description: Business, owner, credential, and owner membership committed. No response body. Sign in through the existing login endpoint.
-        '400':
-          description: Invalid input or unknown fields; nothing persisted.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TenantError'
-        '403':
-          $ref: '#/components/responses/RequestRejected'
-        '409':
-          description: ONBOARDING_CONFLICT; duplicate slug or canonical email. No distinction is exposed and nothing from this request persists.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingConflict'
-  /api/v1/businesses:
-    get:
-      operationId: getMyBusinesses
-      summary: List the signed-in user's active businesses
-      description: Derived solely from the session identity, without a tenant selection. Filters inactive memberships and suspended businesses. Ordered by name and ID; an empty list grants no platform authority.
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Uncached business summaries, with only the current user's role in each business.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  additionalProperties: false
-                  required: [id, name, slug, role]
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    name:
-                      type: string
-                    slug:
-                      type: string
-                    role:
-                      type: string
-                      enum: [BUSINESS_OWNER, DISPATCHER, TECHNICIAN]
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
   /api/v1/health:
     get:
       operationId: getApplicationHealth
@@ -186,13 +95,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: Uncached profile with no credentials, roles, memberships, or tenant claims.
+          description: Uncached global profile, verification evidence, and independently checked platform availability. No credential or tenant authority.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [id, displayName, email]
+                required: [id, displayName, email, emailVerifiedAt, platformAdmin]
                 properties:
                   id:
                     type: string
@@ -202,6 +111,11 @@ paths:
                   email:
                     type: string
                     format: email
+                  emailVerifiedAt:
+                    type: [string, 'null']
+                    format: date-time
+                  platformAdmin:
+                    type: boolean
         '401':
           $ref: '#/components/responses/Unauthenticated'
   /api/v1/auth/logout:
@@ -440,6 +354,372 @@ paths:
           $ref: '#/components/responses/TenantNotFound'
         '409':
           $ref: '#/components/responses/TenantConflict'
+  /api/v1/auth/signup:
+    post:
+      operationId: requestRegistration
+      summary: Request a registration email; generic response for existing identities
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      description: Uses an anonymous or authenticated session for CSRF. No existing authenticated account is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '202':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/auth/signup/complete:
+    post:
+      operationId: completeRegistration
+      summary: Consume a registration challenge and create a verified identity
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      description: Uses an anonymous or authenticated session for CSRF. No existing authenticated account is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRegistration'
+      responses:
+        '204':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/auth/email-verification/request:
+    post:
+      operationId: requestVerification
+      summary: Request verification for the authenticated legacy identity
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '202':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/auth/email-verification/confirm:
+    post:
+      operationId: confirmVerification
+      summary: Confirm email for the matching authenticated identity
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkToken'
+      responses:
+        '204':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/businesses:
+    get:
+      operationId: listBusinesses
+      summary: List active businesses for the verified current user
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusinessSummary'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+    post:
+      operationId: createBusiness
+      summary: Create business and initial owner membership for the verified current user
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBusiness'
+      responses:
+        '201':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessSummary'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/invitations/resolve:
+    post:
+      operationId: resolveInvitation
+      summary: Resolve a live token to an invitation ID without disclosing its recipient
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      description: Uses an anonymous or authenticated session for CSRF. No existing authenticated account is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkToken'
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationReference'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/invitations:
+    get:
+      operationId: listRecipientInvitations
+      summary: List up to 100 newest unexpired pending invitations for the verified recipient
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/invitations/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: getRecipientInvitation
+      summary: Read invitation addressed to the verified current user; wrong account returns 404
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/invitations/{id}/accept:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: acceptInvitation
+      summary: Atomically accept after validating recipient, issuer, membership, tenant and expiry
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationAcceptance'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/tenant/invitations:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    get:
+      operationId: listBusinessInvitations
+      summary: Current owner reads up to 100 latest invitations in the selected business
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+    post:
+      operationId: createInvitation
+      summary: Current owner invites a recipient without creating an identity or membership
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitation'
+      responses:
+        '201':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/tenant/invitations/{id}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: revokeInvitation
+      summary: Current owner revokes a pending invitation in the selected business
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '204':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/tenant/invitations/{id}/resend:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: resendInvitation
+      summary: Current owner replaces an unaccepted invitation; invalidates old pending token
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/tenant/onboarding:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    get:
+      operationId: getOnboarding
+      summary: Read selected business readiness; membership flows are deferred
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingReadiness'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/tenant/onboarding/business/complete:
+    parameters:
+      - $ref: '#/components/parameters/SelectedTenant'
+    post:
+      operationId: completeBusinessSetup
+      summary: Current owner completes checklist after server validates stored business identity
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingReadiness'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/platform/access:
+    get:
+      operationId: getPlatformAccess
+      summary: Check current independent platform grant; requires platform-enabled configuration
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAccess'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/platform/businesses:
+    post:
+      operationId: provisionBusiness
+      summary: Platform operator creates PROVISIONING business and initial-owner invitation
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisionBusiness'
+      responses:
+        '201':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
+  /api/v1/platform/businesses/{id}/owner-invitation:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: reissueOwnerInvitation
+      summary: Platform operator replaces initial-owner offer for a PROVISIONING business
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerEmail'
+      responses:
+        '200':
+          description: Successful operation. See identity-onboarding.md for workflow and delivery semantics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        default:
+          $ref: '#/components/responses/OnboardingFailure'
 components:
   parameters:
     SelectedTenant:
@@ -466,16 +746,114 @@ components:
       name: X-CSRF-TOKEN
       description: Token obtained for the same session from GET /api/v1/auth/csrf.
   schemas:
-    OnboardingConflict:
+    SignupRequest:
       type: object
       additionalProperties: false
-      required: [code, message]
+      required: [displayName, email]
       properties:
-        code:
+        displayName: {type: string, minLength: 1, maxLength: 200}
+        email: {type: string, format: email, maxLength: 254}
+    LinkToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$', writeOnly: true}
+    CompleteRegistration:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$', writeOnly: true}
+        password:
           type: string
-          const: ONBOARDING_CONFLICT
-        message:
-          type: string
+          format: password
+          writeOnly: true
+          minLength: 15
+          description: At least 15 Unicode code points and at most 72 UTF-8 bytes; never normalized.
+    CreateBusiness:
+      type: object
+      additionalProperties: false
+      required: [name, slug]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        slug: {type: string, minLength: 3, maxLength: 63}
+    BusinessSummary:
+      type: object
+      required: [id, name, slug, role]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        role: {$ref: '#/components/schemas/MembershipRole'}
+    OwnerEmail:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+    ProvisionBusiness:
+      type: object
+      additionalProperties: false
+      required: [name, slug, email]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        slug: {type: string, minLength: 3, maxLength: 63}
+        email: {type: string, format: email, maxLength: 254}
+    CreateInvitation:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        role: {$ref: '#/components/schemas/MembershipRole'}
+    InvitationReference:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+    InvitationAcceptance:
+      type: object
+      additionalProperties: false
+      required: [tenantId, membershipId]
+      properties:
+        tenantId: {type: string, format: uuid}
+        membershipId: {type: string, format: uuid}
+    Invitation:
+      type: object
+      additionalProperties: false
+      required: [id, tenantId, businessName, email, role, purpose, status, expiresAt, invitedByUserId]
+      properties:
+        id: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid}
+        businessName: {type: string}
+        email: {type: string, format: email}
+        role: {$ref: '#/components/schemas/MembershipRole'}
+        purpose: {type: string, enum: [TEAM_MEMBER, INITIAL_OWNER]}
+        status: {type: string, enum: [PENDING, ACCEPTED, REVOKED, EXPIRED]}
+        expiresAt: {type: string, format: date-time}
+        invitedByUserId: {type: string, format: uuid}
+    OnboardingReadiness:
+      type: object
+      additionalProperties: false
+      required: [businessComplete, requiredVersion, businessSetupRequired, businessChecklist, membershipFlows]
+      properties:
+        businessComplete: {type: boolean}
+        requiredVersion: {type: integer, const: 1}
+        businessSetupRequired: {type: boolean}
+        businessChecklist: {type: array, items: {type: string}}
+        membershipFlows:
+          type: array
+          maxItems: 0
+          description: No role-specific domain checklist exists in this milestone.
+          items: {type: string}
+    PlatformAccess:
+      type: object
+      additionalProperties: false
+      required: [platformAdmin]
+      properties:
+        platformAdmin: {type: boolean, const: true}
     MembershipRole:
       type: string
       enum: [BUSINESS_OWNER, DISPATCHER, TECHNICIAN]
@@ -497,7 +875,7 @@ components:
         id: {type: string, format: uuid}
         name: {type: string}
         slug: {type: string}
-        status: {type: string, enum: [ACTIVE, SUSPENDED]}
+        status: {type: string, enum: [PROVISIONING, ACTIVE, SUSPENDED]}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
         version: {type: integer, format: int64}
@@ -558,6 +936,12 @@ components:
         message:
           type: string
   responses:
+    OnboardingFailure:
+      description: 400 invalid input/link; 401 authentication required; 403 verification/authority/CSRF denied; 404 inaccessible invitation; 409 uniqueness, inactive relationship or unavailable invitation; 429 bounded rate limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantError'
     TenantBadRequest:
       description: Missing or malformed tenant selection, invalid payload, or invalid pagination.
       content:

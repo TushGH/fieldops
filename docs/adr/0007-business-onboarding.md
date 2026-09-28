@@ -1,5 +1,7 @@
 # ADR 0007: Atomic business signup and same-origin login UI
 
+Status: superseded by [email-first identity onboarding](0007-identity-onboarding.md). The combined `/api/v1/onboarding` endpoint and its legacy UI/proxy are removed when integrating the newer flow. Existing accounts and businesses are preserved by migrations V6–V8.
+
 ## Context
 
 FIELD-009/010 need a business onboarding flow and usable login screens. The product baseline anticipated operator-assisted onboarding. For this milestone, the product owner explicitly chose direct signup by new business owners. Existing global users, tenant memberships, password sessions, and tenant access checks already supply the persistence and security foundation.

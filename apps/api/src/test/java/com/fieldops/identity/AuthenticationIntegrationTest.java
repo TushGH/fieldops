@@ -94,7 +94,9 @@ class AuthenticationIntegrationTest {
             assertThat(me.statusCode()).isEqualTo(200);
             assertThat(me.headers().firstValue("cache-control")).hasValue("no-store");
             var body = json.readTree(me.body());
-            assertThat(body.size()).isEqualTo(3);
+            assertThat(body.size()).isEqualTo(5);
+            assertThat(body.path("emailVerifiedAt").isNull()).isTrue();
+            assertThat(body.path("platformAdmin").asBoolean()).isFalse();
             assertThat(body.path("id").asText()).isEqualTo(userId.toString());
             assertThat(body.path("email").asText()).isEqualTo(EMAIL);
             assertThat(body.path("displayName").asText()).isEqualTo("Login User");

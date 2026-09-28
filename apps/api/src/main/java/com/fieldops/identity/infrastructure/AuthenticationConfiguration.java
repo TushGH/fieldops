@@ -36,14 +36,14 @@ public class AuthenticationConfiguration {
 
     @Bean
     SecurityFilterChain authenticationFilterChain(HttpSecurity http, PasswordUserDetailsService users,
-                                                 PasswordEncoder encoder, UserService userService) throws Exception {
+                                                 PasswordEncoder encoder, UserService userService, com.fieldops.audit.SecurityAudit audit) throws Exception {
         var provider = new DaoAuthenticationProvider(users);
         provider.setPasswordEncoder(encoder);
         http.authenticationProvider(provider)
                 .authorizeHttpRequests(requests -> requests
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/health", "/actuator/health", "/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/onboarding").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/signup", "/api/v1/auth/signup/complete", "/api/v1/invitations/resolve").permitAll()
                         // Tenant endpoints additionally enforce context and roles in application services.
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))
@@ -53,10 +53,12 @@ public class AuthenticationConfiguration {
                         .successHandler((request, response, authentication) -> {
                             response.setHeader("Cache-Control", "no-store");
                             response.setStatus(204);
+                            audit.independent(java.util.UUID.fromString(authentication.getName()), null, "LOGIN", "SUCCESS", null);
                         })
                         .failureHandler((request, response, exception) -> {
                             var session = request.getSession(false);
                             if (session != null) session.invalidate();
+                            audit.independent(null, null, "LOGIN", "FAILURE", null);
                             AuthenticationErrors.unauthenticated(response);
                         }))
                 .logout(logout -> logout.logoutUrl("/api/v1/auth/logout")
@@ -69,6 +71,7 @@ public class AuthenticationConfiguration {
                         .authenticationEntryPoint((request, response, exception) -> AuthenticationErrors.unauthenticated(response))
                         .accessDeniedHandler((request, response, exception) -> AuthenticationErrors.forbidden(response)))
                 .sessionManagement(session -> session.sessionFixation(fixation -> fixation.changeSessionId()))
+                .addFilterBefore(new IdentityRateLimitFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new ActiveUserSessionFilter(userService), SecurityContextHolderFilter.class);
         // Default CSRF protection includes login and logout.
         return http.build();

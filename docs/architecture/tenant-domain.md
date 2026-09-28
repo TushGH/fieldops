@@ -1,5 +1,9 @@
 # Tenant domain design
 
+## Identity-onboarding update (2026-09-27)
+
+Identity onboarding adds PROVISIONING for assisted creation. Existing ACTIVE/SUSPENDED behavior remains, and ordinary reactivation cannot activate a provisioning tenant. Initial-owner acceptance is the only request-facing activation path. See [identity onboarding](identity-onboarding.md) for the V7 lifecycle extension and shared setup state. Earlier FIELD-001/002 scope statements below are historical.
+
 Status: FIELD-001 design implemented for persistence in FIELD-002. Tenant domain code, V2 migration, repository, and internal creation/retrieval use cases exist. Authentication, authorization, and tenant isolation remain unimplemented.
 
 This design follows [AGENTS.md](../../AGENTS.md), the [product definition](../product/PRODUCT.md), [architecture v1](architecture-v1.md), and [ADR 0003](../adr/0003-tenant-domain-model.md).

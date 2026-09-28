@@ -20,7 +20,9 @@ Planned capabilities include tenant isolation, role-based access, customer and t
 
 ## Current status
 
-**Phase 2: Business onboarding and login UI (FIELD-002–010).** The repository has a working Spring Boot backend, Next.js login and onboarding UI, PostgreSQL Compose service, Flyway migrations, and GitHub Actions validation. The tenant and identity modules support internal creation/retrieval, validated domain operations, and optimistic locking. Global users can belong to multiple tenants through independent memberships. Backend email/password authentication now uses Spring Security sessions with CSRF protection, logout, and a current-user endpoint. Membership roles and tenant-scoped Tenant/Membership APIs are implemented with PostgreSQL isolation tests. Direct new-business signup, login/logout, and an authenticated business selection/welcome screen are implemented. Platform administration and customer/work-order workflows remain unimplemented. The application is a local development foundation, not a production release.
+**Identity onboarding implemented.** FieldOps now supports email-first account registration, legacy-account verification, session login, creating multiple businesses with one account, team invitations, business selection, scoped owner setup, and restricted platform-assisted provisioning. PostgreSQL migrations V1–V8 and Testcontainers protect existing identities and tenant isolation. The Next.js frontend provides the associated account and business screens. Customer/work-order workflows remain future work.
+
+The [identity-onboarding contract](docs/architecture/identity-onboarding.md) documents implementation details, API behavior, SMTP configuration, limits, operator procedures, and deferred work. Platform HTTP operations default to disabled; SMTP must be configured before using registration. This is a local development foundation, not a public production release.
 
 [PRODUCT.md](docs/product/PRODUCT.md) defines the planned product. [ROADMAP.md](docs/ROADMAP.md) distinguishes completed foundation work from the next identity and multi-tenancy phase.
 
@@ -42,7 +44,7 @@ Spring Security provides backend session authentication. Richer frontend librari
 ```text
 .github/workflows/ci.yml    Backend and frontend validation
 apps/api/                  Spring Boot application and Maven wrapper
-apps/web/                  Next.js login and onboarding UI and health proxy
+apps/web/                  Next.js account and business UI and health proxy
 docker-compose.yml         Local PostgreSQL service
 .env.example               Shared local database/backend configuration example
 services/                  Reserved; no independent services
@@ -106,7 +108,7 @@ cd apps/api
 
 Compose reads `.env` automatically, but Spring Boot does not; sourcing it exports the backend settings. Run these commands again in each new backend terminal. The backend defaults to `127.0.0.1:8080`.
 
-On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. V4 adds separate password credentials without assigning passwords to existing users. V5 adds membership roles, backfilling existing memberships as TECHNICIAN without granting owner privileges. Existing databases advance through these migrations without changing released migrations. Hibernate uses `ddl-auto=validate` and does not modify the schema.
+On startup, Flyway applies pending migrations: V1 establishes migration history and V2 creates `public.tenants` with required values, validation checks, a UUID primary key, and a unique slug. V3 adds global users and tenant memberships with canonical unique email addresses, unique tenant/user pairs, and restrictive foreign keys. V4 adds separate password credentials without assigning passwords to existing users. V5 adds membership roles, backfilling existing memberships as TECHNICIAN without granting owner privileges. V6 adds email verification challenges and security audit, V7 adds independent platform grants, provisioning, and invitations, and V8 adds scoped onboarding progress. Existing identities remain unverified and existing businesses remain incomplete. Existing databases advance without changing released migrations. Hibernate uses `ddl-auto=validate` and does not modify the schema.
 
 ### 4. Start the frontend
 
@@ -118,7 +120,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Choose **Create your business**, complete setup, then sign in with the account you created. Select your business to open its welcome screen. Next.js reads `apps/web/.env.local` automatically.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The landing page offers **Create a business** and **Sign in**. Configure SMTP below to receive account verification links. The health proxy remains available at `/api/health`. Next.js reads `apps/web/.env.local` automatically.
 
 ### 5. Verify the application
 
@@ -134,9 +136,9 @@ The application endpoint and frontend proxy return:
 {"application":"fieldops-api","status":"UP"}
 ```
 
-Actuator returns `{"status":"UP"}` when aggregate health, including PostgreSQL, is healthy. The application endpoint only proves application reachability; it does not continuously check the database. The contract is recorded in [openapi.yaml](docs/architecture/openapi.yaml).
+Actuator returns `{"status":"UP"}` when aggregate health, including PostgreSQL, is healthy. SMTP is checked through delivery audit outcomes and is excluded from aggregate health. The application endpoint only proves application reachability; it does not continuously check the database. The contract is recorded in [openapi.yaml](docs/architecture/openapi.yaml).
 
-The browser requests `/api/health` from Next.js. The server forwards to the fixed backend health path using server-only `API_BASE_URL`, with no caching and a five-second timeout. Failed or malformed backend responses become HTTP 503 with `{"status":"UNAVAILABLE"}`. No CORS policy or public backend URL is needed for this flow.
+The browser requests `/api/health` from Next.js. The server forwards to the fixed backend health path using server-only `API_BASE_URL`, with no caching and a five-second timeout. Failed or malformed backend responses become HTTP 503 with `{"status":"UNAVAILABLE"}`. The separate `/api/backend/[...path]` proxy allowlists onboarding endpoints and forwards only the session cookie, CSRF, content type, and tenant selection. No CORS policy or public backend URL is needed.
 
 ### Configuration and troubleshooting
 
@@ -149,6 +151,7 @@ The browser requests `/api/health` from Next.js. The server forwards to the fixe
 | `DATABASE_URL` | Root `.env` | Backend JDBC URL; align database name and port with Compose |
 | `API_PORT` | Root `.env` | Backend port; default `8080` |
 | `SESSION_COOKIE_SECURE` | Root `.env` | Defaults to `true`; set `false` only for local HTTP authentication |
+| `WEB_ORIGIN` | Root `.env` and `apps/web/.env.local` | Browser origin for email links and frontend mutation checks; local default `http://127.0.0.1:3000` |
 | `API_BASE_URL` | `apps/web/.env.local` | Next.js server's backend URL; default `http://127.0.0.1:8080` |
 
 If port 5432 is occupied, set `POSTGRES_PORT=55432` and `DATABASE_URL=jdbc:postgresql://localhost:55432/fieldops` in `.env`, then rerun Compose and restart the backend with the new environment. If changing `API_PORT`, update the frontend's `API_BASE_URL` and restart it. Set `PORT=3001 npm run dev` if the web port is occupied.
@@ -159,11 +162,21 @@ If the page says API unavailable, check the backend logs and direct health URL f
 
 Stop the frontend and backend with Ctrl+C. Stop the database from the repository root with `docker compose down`; this retains its data volume.
 
+## Email and onboarding
+
+Registration sends an expiring verification link before creating an account. Configure `WEB_ORIGIN`, `MAIL_HOST`, `MAIL_PORT`, and `MAIL_FROM` in the root `.env`, plus the provider's authentication/TLS settings when needed. The defaults expect a separately supplied local SMTP inbox on port 1025; Compose does not start one. Export the variables and restart the backend. No tokens or initial passwords are printed to logs.
+
+For an existing Mailpit container named `mailpit`, run `docker start mailpit` and confirm `docker port mailpit` shows SMTP port 1025 and inbox port 8025. Set `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`, `MAIL_AUTH=false`, and `MAIL_STARTTLS=false` in `.env` because the API runs on the host. Open [the Mailpit inbox](http://127.0.0.1:8025) to receive verification links. During `npm run dev`, the frontend accepts `localhost`, `127.0.0.1`, and `[::1]` aliases for a configured loopback `WEB_ORIGIN`, with the same scheme and port. Production requires the exact configured origin. Keep using one hostname during a session because browser cookies are host-specific.
+
+With configuration ready, `./scripts/start-local.sh` starts PostgreSQL and both applications, writing application logs under `logs/`. Use `--check` to validate prerequisites first. Ctrl+C stops the applications and leaves the database and separately managed Mailpit running.
+
+After registration, sign in, create a business, and review its setup. Business owners can invite teammates from the workspace; teammates use their existing global account or register once. Email delivery failures leave committed challenges/invitations recoverable by resend. See the [complete configuration and operator guide](docs/architecture/identity-onboarding.md#smtp-limits-audit-and-operation).
+
 ## Backend authentication
 
 The [authentication contract](docs/architecture/authentication.md) documents CSRF token retrieval, form-encoded login, current-user retrieval, and POST logout. The API uses an HttpOnly session cookie; no JWT or browser token storage is involved. Tenant workspace authorization is described in the [tenant access contract](docs/architecture/tenant-access.md).
 
-Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. FIELD-009/010 expose a CSRF-protected signup workflow that creates a new business, new owner, credential, and owner membership atomically. See the [onboarding contract](docs/architecture/business-onboarding.md). Operator tooling and password recovery remain deferred. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
+Existing users have no default passwords. Initial credentials are provisioned by the trusted internal `PasswordCredentialService`, which has no public HTTP endpoint. Public email-first signup and frontend login are implemented. Existing accounts can verify after login; accounts without credentials still require trusted internal provisioning. Password recovery remains separate work. Authentication HTTP tests provision their own ephemeral users and exercise the complete flow.
 
 For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.env` (new copies of `.env.example` already include it), export it, and restart the API. Keep the default `true` for HTTPS deployments. Sessions expire after 30 minutes of inactivity and are lost on backend restart. See [ADR 0005](docs/adr/0005-session-authentication.md) for deployment limits and alternatives.
 
@@ -171,7 +184,7 @@ For local HTTP login, add `SESSION_COOKIE_SECURE=false` to an existing root `.en
 
 Send the authenticated session cookie and exactly one `X-Tenant-ID` header for `/api/v1/tenant` and its subpaths. The backend validates active user/membership/tenant state on each request. Roles belong to memberships, so authority in one business grants nothing in another.
 
-All three initial roles can read selected tenant metadata. BUSINESS_OWNER can rename the tenant and list/read/manage its memberships. Mutations require CSRF protection; ownership fields cannot be supplied or reassigned. Signup assigns the first owner only to the newly created business; it cannot grant ownership of an existing business. See the [permission matrix and isolation boundaries](docs/architecture/tenant-access.md) and [ADR 0006](docs/adr/0006-tenant-context-and-access-control.md).
+All three initial roles can read selected tenant metadata. BUSINESS_OWNER can rename the tenant and list/read/manage its memberships. Mutations require CSRF protection; ownership fields cannot be supplied or reassigned. Verified users can create a business with their own initial owner membership; platform operators can provision an initial-owner invitation. Tenant authorization remains separate from those global operations. See the [permission matrix and isolation boundaries](docs/architecture/tenant-access.md) and [ADR 0006](docs/adr/0006-tenant-context-and-access-control.md).
 
 ## Tests and builds
 
@@ -193,9 +206,11 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-`typecheck` generates Next.js route types before checking TypeScript, so it works on a fresh checkout. Proxy tests cover health responses, cookie/CSRF forwarding, route restrictions, and error handling. Run `npm run test:e2e` with Chrome and both local servers running to exercise desktop/mobile onboarding and login; these browser tests create unique test businesses in the connected development database. The frontend build does not require a running backend. To run the production build locally, use `npm start` after `npm run build`.
+`typecheck` generates Next.js route types before checking TypeScript, so it works on a fresh checkout. Nine proxy tests cover health behavior plus onboarding route allowlisting, origin checks, payload bounds, cookie rotation, and session/CSRF forwarding. `npm run test:e2e` runs Playwright against the production build; first run `npx playwright install chromium`. Browser tests use deterministic API fixtures; backend HTTP integration tests use PostgreSQL Testcontainers. The frontend build does not require a running backend. To run the production build locally, use `npm start` after `npm run build`.
 
 GitHub Actions runs these backend/frontend checks independently on pushes and pull requests. Backend tests use the runner's Docker daemon through Testcontainers. There is no deployment job. Local equivalents have been executed; the hosted workflow will run once the repository is pushed to GitHub.
 

@@ -1,81 +1,74 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { submit } from "@/lib/api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { api, destination, setIntent, type User } from "@/lib/identity-api";
+import { Heading, IdentityShell } from "./identity-shell";
 
-export function AccountForm({ onboarding = false, created = false }: { onboarding?: boolean; created?: boolean }) {
-  const router = useRouter();
+type Mode = "login" | "signup" | "complete" | "verify";
+export function AccountForm({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [visible, setVisible] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const password = String(data.get("password"));
-    if (onboarding && (Array.from(password).length < 15 || new TextEncoder().encode(password).length > 72)) {
-      setError("Choose a password with at least 15 characters and at most 72 UTF-8 bytes.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const response = onboarding
-        ? await submit("onboarding", JSON.stringify(Object.fromEntries(data)), "application/json")
-        : await submit("auth/login", new URLSearchParams({ email: String(data.get("email")), password }), "application/x-www-form-urlencoded");
-      if (!response.ok) {
-        const message = response.status === 409
-          ? "We couldn’t create a business with those details. Try another business identifier, or sign in if you already have an account."
-          : response.status === 401 ? "The email or password is incorrect. Please try again."
-          : response.status === 400 ? "Check your details, including your email and business identifier."
-          : response.status === 403 ? "Your session could not be verified. Please try again."
-          : "We couldn’t complete your request. Please try again. If you submitted business setup, try signing in first.";
-        throw new Error(message);
+  const [notice, setNotice] = useState("");
+  const [hasToken, setHasToken] = useState(false);
+  const token = useRef("");
+  useEffect(() => {
+    function captureFragment() {
+      const incoming = new URLSearchParams(window.location.hash.slice(1)).get("token");
+      if (incoming) {
+        token.current = incoming;
+        setHasToken(true);
+        history.replaceState(null, "", window.location.pathname + window.location.search);
       }
-      form.reset();
-      // Reset the form before navigation so credentials do not survive in client state.
-      if (onboarding) router.replace("/login?created=1");
-      else { router.replace("/workspace"); router.refresh(); }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Something went wrong. Please try again.");
-      setBusy(false);
     }
+    // Capture browser-only input after hydration and when a mail link targets this already-open page.
+    captureFragment();
+    window.addEventListener("hashchange", captureFragment);
+    if (new URLSearchParams(window.location.search).get("intent") === "create-business") setIntent("create-business");
+    return () => window.removeEventListener("hashchange", captureFragment);
+  }, []);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      if (mode === "login") {
+        await api("auth/login", { method: "POST", data, form: true });
+        window.location.assign(await destination(await api<User>("auth/me")));
+      } else if (mode === "signup") {
+        await api("auth/signup", { method: "POST", data });
+        setNotice("Check your email for a link to choose your password. If you already have an account, sign in instead.");
+      } else if (mode === "complete") {
+        await api("auth/signup/complete", { method: "POST", data: { token: token.current, password: data.password } });
+        token.current = ""; setNotice("Your account is ready. Sign in to continue.");
+      } else {
+        await api(`auth/email-verification/${hasToken ? "confirm" : "request"}`, {
+          method: "POST", data: hasToken ? { token: token.current } : undefined,
+        });
+        if (hasToken) window.location.assign(await destination(await api<User>("auth/me")));
+        else setNotice("Check your email for a verification link. Open it while signed in to this account.");
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : "Please try again."); }
+    finally { setBusy(false); }
   }
-
-  return <div className="form-content">
-    <p className="eyebrow">{onboarding ? "LET’S GET YOU SET UP" : "YOUR BUSINESS STARTS HERE"}</p>
-    <h2>{onboarding ? "Make it your business." : "Welcome back."}</h2>
-    <p className="muted">{onboarding ? "Create your business and your owner account. All in one step." : "Sign in to your FieldOps account."}</p>
-    {created && <p className="notice success" role="status">Your business is ready. Sign in with your new account to continue.</p>}
-    <form onSubmit={handleSubmit} className="account-form">
-      <fieldset disabled={busy}>
-        {onboarding && <>
-          <label htmlFor="businessName">Business name</label>
-          <input id="businessName" name="businessName" autoComplete="organization" maxLength={200} placeholder="e.g. Oak & Pine Plumbing" required />
-          <label htmlFor="slug">Business identifier</label>
-          <input id="slug" name="slug" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={63}
-            pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="oak-pine-plumbing" aria-describedby="slug-hint" required />
-          <p className="field-hint" id="slug-hint">A unique, permanent identifier. Use 3–63 lowercase letters, numbers, or single hyphens between words.</p>
-          <label htmlFor="ownerName">Your name</label>
-          <input id="ownerName" name="ownerName" autoComplete="name" maxLength={200} placeholder="Full name" required />
-        </>}
-        <label htmlFor="email">Email address</label>
-        <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" maxLength={254} placeholder="you@yourbusiness.com" required />
-        <label htmlFor="password">Password</label>
-        <div className="password-field">
-          <input id="password" name="password" type={visible ? "text" : "password"} autoComplete={onboarding ? "new-password" : "current-password"}
-            aria-describedby={onboarding ? "password-hint" : undefined} required />
-          <button type="button" aria-label={visible ? "Hide password" : "Show password"} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? "Hide" : "Show"}</button>
-        </div>
-        {onboarding && <p className="field-hint" id="password-hint">At least 15 characters. A memorable passphrase works well. Maximum 72 UTF-8 bytes.</p>}
-        {error && <p className="notice error" role="alert">{error}</p>}
-        <button className="primary-button" type="submit">{busy ? "Please wait…" : onboarding ? "Create your business" : "Sign in"}<span aria-hidden="true">↗</span></button>
-      </fieldset>
-    </form>
-    <p className="form-switch">{onboarding ? "Already have an account?" : "New to FieldOps?"} <Link href={onboarding ? "/login" : "/onboarding"}>{onboarding ? "Sign in" : "Create your business"}</Link></p>
-  </div>;
+  const title = { login: "Welcome back.", signup: "One account. Every business.", complete: "Choose your password.", verify: "Verify your email." }[mode];
+  return <IdentityShell signedIn={mode === "verify"}><div className="account-grid">
+    <Heading eyebrow="Your FieldOps account" title={title}>
+      {mode === "signup" ? "Create your account first. Then start a business or join a team that invited you." : mode === "verify" ? "Confirm your email address before creating or entering a business." : "Your account connects you to the service businesses you work with."}
+    </Heading>
+    <section className="panel">
+      {error && <p role="alert" className="error">{error}</p>}
+      {notice ? <div role="status"><p>{notice}</p><a className="button mt-6" href="/login">Continue to sign in</a><button className="secondary mt-6" onClick={() => setNotice("")}>Back</button></div>
+        : <form onSubmit={submit} className="stack">
+          {mode === "signup" && <label>Your name<input name="displayName" autoComplete="name" required maxLength={200} /></label>}
+          {(mode === "signup" || mode === "login") && <label>Email address<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>}
+          {(mode === "login" || mode === "complete") && <label>Password<input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "complete" ? 15 : undefined} aria-describedby={mode === "complete" ? "password-hint" : undefined} /></label>}
+          {mode === "complete" && <p id="password-hint" className="hint">At least 15 characters; at most 72 UTF-8 bytes.</p>}
+          {mode === "complete" && !hasToken && <p className="muted">Open the link from your email. If it expired, request another from the signup page.</p>}
+          <button disabled={busy || (mode === "complete" && !hasToken)}>{busy ? "Please wait…" : { login: "Sign in", signup: "Send verification email", complete: "Create account", verify: hasToken ? "Confirm email" : "Send verification email" }[mode]}</button>
+          {mode === "login" && <p className="muted">New to FieldOps? <a href="/signup">Create an account</a></p>}
+          {mode === "signup" && <p className="muted">Already registered? <a href="/login">Sign in</a></p>}
+          {mode === "complete" && <a href="/signup">Request another link</a>}
+          {mode === "verify" && <p className="hint">Using the wrong account? Sign out, sign in with the address that received the link, then reopen the email.</p>}
+        </form>}
+    </section>
+  </div></IdentityShell>;
 }
