@@ -62,6 +62,12 @@ public class Tenant {
         return tenant;
     }
 
+    public static Tenant provision(String name, String slug) {
+        var tenant = create(name, slug);
+        tenant.status = TenantStatus.PROVISIONING;
+        return tenant;
+    }
+
     public void rename(String name) {
         this.name = normalizeName(name);
     }
@@ -71,6 +77,7 @@ public class Tenant {
     }
 
     public void reactivate() {
+        if (status == TenantStatus.PROVISIONING) throw new IllegalStateException("Accept the initial owner invitation first");
         status = TenantStatus.ACTIVE;
     }
 

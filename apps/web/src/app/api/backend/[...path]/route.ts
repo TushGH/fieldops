@@ -1,0 +1,68 @@
+const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const routes: [string, RegExp][] = [
+  ["GET", /^(auth\/(csrf|me)|businesses|invitations|tenant\/(context|onboarding|invitations)|tenant|platform\/access)$/],
+  ["GET", new RegExp(`^invitations/${uuid}$`)],
+  ["POST", /^(auth\/(login|logout|signup|signup\/complete|email-verification\/(request|confirm))|businesses|invitations\/resolve|tenant\/invitations|tenant\/onboarding\/business\/complete|platform\/businesses)$/],
+  ["POST", new RegExp(`^(invitations/${uuid}/accept|tenant/invitations/${uuid}/(revoke|resend)|platform/businesses/${uuid}/owner-invitation)$`)],
+  ["PATCH", /^tenant$/],
+];
+
+function failure(message: string, status: number) {
+  return Response.json({ message }, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+}
+
+async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }) {
+  const path = (await context.params).path.join("/");
+  if (!routes.some(([method, pattern]) => method === request.method && pattern.test(path))) {
+    return failure("Unknown API route.", 404);
+  }
+  const mutation = request.method !== "GET";
+  if (mutation && request.headers.get("origin") !== new URL(request.url).origin) {
+    return failure("Request origin rejected.", 403);
+  }
+  const headers = new Headers();
+  for (const name of ["content-type", "x-csrf-token", "x-tenant-id"]) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const cookie = request.headers.get("cookie")?.split(";").map(value => value.trim())
+    .filter(value => value.startsWith("FIELDOPS_SESSION=")).join("; ");
+  if (cookie) headers.set("cookie", cookie);
+  let body: Uint8Array | undefined;
+  if (mutation && request.body) {
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > 16384) { await reader.cancel(); return failure("Request is too large.", 413); }
+      chunks.push(value);
+    }
+    body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.length; }
+  }
+  try {
+    const origin = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";
+    const upstream = await fetch(new URL(`/api/v1/${path}`, origin), {
+      method: request.method, headers, body: body as BodyInit | undefined,
+      cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(15000),
+    });
+    const outgoing = new Headers({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+    for (const name of ["content-type", "retry-after"]) {
+      const value = upstream.headers.get(name);
+      if (value) outgoing.set(name, value);
+    }
+    for (const value of upstream.headers.getSetCookie()) {
+      if (value.startsWith("FIELDOPS_SESSION=")) outgoing.append("set-cookie", value);
+    }
+    return new Response(upstream.status === 204 ? null : await upstream.arrayBuffer(), {
+      status: upstream.status, headers: outgoing,
+    });
+  } catch {
+    return failure("FieldOps is temporarily unavailable. Please try again.", 503);
+  }
+}
+export { proxy as GET, proxy as POST, proxy as PATCH };

@@ -42,6 +42,11 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    public Instant getEmailVerifiedAt() { return emailVerifiedAt; }
+
     @Version
     @Column(nullable = false)
     private Long version;

@@ -1,6 +1,6 @@
 # Login, signup, invitations, tenant selection, and onboarding proposal
 
-Status: **Draft — awaiting review and approval. Not an implementation authorization or accepted ADR.**
+Status: **Historical proposal; implementation authorized on 2026-09-27.** The implemented scope and deliberate deferrals are recorded in [ADR 0007](../adr/0007-identity-onboarding.md) and the [implementation contract](identity-onboarding.md). The reviewed baseline below differs from the checkout used for implementation.
 
 Date: 2026-09-27
 
@@ -31,7 +31,7 @@ The foundation already supports the central requirement:
 
 The current signup **does not duplicate existing users**: global email uniqueness rejects them. Its limitation is that an existing user cannot use it to create another business or accept an invitation.
 
-[ADR 0007](../adr/0007-business-onboarding.md) should eventually be superseded where it couples registration and business creation. The earlier identity and tenant-access decisions remain sound.
+The earlier review referred to a business-onboarding ADR 0007 that is absent from this checkout. The current [ADR 0007](../adr/0007-identity-onboarding.md) records the implemented separation of registration and business creation. The earlier identity and tenant-access decisions remain sound.
 
 ## 2. Recommended domain model
 

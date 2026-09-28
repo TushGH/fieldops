@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthenticationController {
     private final UserService users;
 
-    public AuthenticationController(UserService users) {
+    private final com.fieldops.platform.application.PlatformAccess platform;
+
+    public AuthenticationController(UserService users, com.fieldops.platform.application.PlatformAccess platform) {
+        this.platform = platform;
         this.users = users;
     }
 
@@ -30,10 +33,10 @@ public class AuthenticationController {
     public ResponseEntity<CurrentUserResponse> currentUser(Authentication authentication) {
         return users.findById(UUID.fromString(authentication.getName()))
                 .map(user -> ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                        .body(new CurrentUserResponse(user.id(), user.displayName(), user.email())))
+                        .body(new CurrentUserResponse(user.id(), user.displayName(), user.email(), user.emailVerifiedAt(), platform.hasGrant(user.id()))))
                 .orElseGet(() -> ResponseEntity.status(401).build());
     }
 
     public record CsrfResponse(String headerName, String token) { }
-    public record CurrentUserResponse(UUID id, String displayName, String email) { }
+    public record CurrentUserResponse(UUID id, String displayName, String email, java.time.Instant emailVerifiedAt, boolean platformAdmin) { }
 }

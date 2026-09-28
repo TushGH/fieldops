@@ -1,5 +1,9 @@
 # User and membership domain
 
+## Identity-onboarding update (2026-09-27)
+
+Identity onboarding extends User with nullable `email_verified_at`; ACTIVE is still independent of verification. V6 preserves legacy identities as unverified, and V7–V8 add invitation/platform/progress records without changing membership ownership. See [identity onboarding](identity-onboarding.md).
+
 Status: implemented for [FIELD-003](https://github.com/TushGH/fieldops/issues/3). FIELD-003 establishes identity records and relationships. FIELD-004 adds [session authentication](authentication.md); FIELD-005–008 add [membership roles and tenant access enforcement](tenant-access.md). See [ADR 0004](../adr/0004-users-and-tenant-memberships.md) for the decision and alternatives.
 
 ## Domain boundaries

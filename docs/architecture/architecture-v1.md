@@ -1,5 +1,9 @@
 # Architecture v1: modular monolith
 
+## Identity-onboarding update (2026-09-27)
+
+Identity onboarding is implemented through V6–V8 with email challenges, SMTP after commit, scoped invitations/progress, independent platform grants, and a Next.js account/business UI. Existing tenant access now requires verified email. See [the implementation contract](identity-onboarding.md) and [ADR 0007](../adr/0007-identity-onboarding.md); the original milestone descriptions below remain historical context.
+
 Status: target architecture with a Phase 1 application foundation implemented. Tenant persistence is implemented in FIELD-002; global users and tenant memberships are implemented in FIELD-003. FIELD-004 adds backend session authentication; FIELD-005–008 add membership roles, validated request-scoped tenant context, and isolation for current tenant/membership APIs. Other domain capabilities below remain planned. See [ADR 0001](../adr/0001-use-modular-monolith.md) and [ADR 0002](../adr/0002-use-postgresql.md).
 
 ## System shape

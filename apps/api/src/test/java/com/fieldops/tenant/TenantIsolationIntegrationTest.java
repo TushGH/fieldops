@@ -126,7 +126,7 @@ class TenantIsolationIntegrationTest {
     @Test
     void migratesExistingMembershipsWithoutGrantingOwnerPrivileges() {
         assertThat(memberships.find(LEGACY_TENANT, LEGACY_USER).orElseThrow().role()).isEqualTo(MembershipRole.TECHNICIAN);
-        assertThat(context.getBean(Flyway.class).info().current().getVersion().getVersion()).isEqualTo("5");
+        assertThat(context.getBean(Flyway.class).info().current().getVersion().getVersion()).isEqualTo("8");
         context.getBean(Flyway.class).validate();
         assertThatThrownBy(() -> jdbc.update("UPDATE memberships SET role = 'PLATFORM_ADMIN' WHERE id = ?", ownerMembershipA.id()))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -311,6 +311,7 @@ class TenantIsolationIntegrationTest {
 
     private static UserDetails user(String label) {
         var user = users.create(label, label + "@example.com");
+        jdbc.update("UPDATE users SET email_verified_at = now() WHERE id = ?", user.id());
         passwords.provision(user.id(), PASSWORD);
         return user;
     }

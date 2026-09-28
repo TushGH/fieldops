@@ -44,6 +44,9 @@ public class AuthenticatedTenantContext {
         if (users.findById(userId).filter(user -> user.status() == UserStatus.ACTIVE).isEmpty()) {
             throw new AuthenticationCredentialsNotFoundException("Active user required");
         }
+        if (users.findById(userId).orElseThrow().emailVerifiedAt() == null) {
+            throw new TenantAccessException(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before entering a business.");
+        }
         var headers = Collections.list(request.getHeaders("X-Tenant-ID"));
         if (headers.isEmpty()) {
             throw new TenantAccessException(400, "TENANT_REQUIRED", "Select a tenant with X-Tenant-ID.");

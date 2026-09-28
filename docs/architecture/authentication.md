@@ -1,5 +1,9 @@
 # Authentication
 
+## Identity-onboarding update (2026-09-27)
+
+Identity onboarding now adds verified-email state and independently checked platformAdmin to `/auth/me`, public CSRF-protected registration, legacy verification, rate limits, and a frontend login. Existing session, password, and CSRF protocols remain unchanged. See [identity onboarding](identity-onboarding.md) for the current additions; the FIELD-004 sections below describe the original milestone.
+
 Status: FIELD-004 backend authentication implemented. See [ADR 0005](../adr/0005-session-authentication.md) for decisions and tradeoffs. FIELD-005–008 add [tenant selection and membership-role authorization](tenant-access.md); frontend login remains unimplemented.
 
 ## HTTP contract

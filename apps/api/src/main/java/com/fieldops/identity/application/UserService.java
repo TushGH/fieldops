@@ -17,10 +17,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
     private final UserRepository users;
     private final Validator validator;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public UserService(UserRepository users, Validator validator) {
+    public UserService(UserRepository users, Validator validator, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
         this.users = users;
         this.validator = validator;
+    }
+
+    public boolean isVerifiedActive(UUID id) {
+        return users.existsByIdAndStatusAndEmailVerifiedAtIsNotNull(id, com.fieldops.identity.domain.UserStatus.ACTIVE);
+    }
+
+    /** Coordinates platform grant consumption with a concurrent global account disable. */
+    @Transactional
+    public boolean lockVerifiedActive(UUID id) {
+        return !jdbc.query("SELECT id FROM users WHERE id = ? AND status = 'ACTIVE' AND email_verified_at IS NOT NULL FOR SHARE",
+                (rs, row) -> rs.getObject(1, UUID.class), id).isEmpty();
     }
 
     @Transactional
