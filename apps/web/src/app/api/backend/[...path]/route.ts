@@ -1,9 +1,12 @@
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 const routes: [string, RegExp][] = [
-  ["GET", /^(auth\/(csrf|me)|businesses|invitations|tenant\/(context|onboarding|invitations)|tenant|platform\/access)$/],
+  ["GET", /^(auth\/(csrf|me)|businesses|invitations|tenant\/(context|onboarding|invitations|memberships)|tenant|platform\/access)$/],
   ["GET", new RegExp(`^invitations/${uuid}$`)],
   ["POST", /^(auth\/(login|logout|signup|signup\/complete|email-verification\/(request|confirm))|businesses|invitations\/resolve|tenant\/invitations|tenant\/onboarding\/business\/complete|platform\/businesses)$/],
   ["POST", new RegExp(`^(invitations/${uuid}/accept|tenant/invitations/${uuid}/(revoke|resend)|platform/businesses/${uuid}/owner-invitation)$`)],
+  ["GET", new RegExp(`^tenant/memberships/${uuid}$`)],
+  ["PUT", new RegExp(`^tenant/memberships/${uuid}/role$`)],
+  ["POST", new RegExp(`^tenant/memberships/${uuid}/(deactivate|reactivate)$`)],
   ["PATCH", /^tenant$/],
 ];
 
@@ -31,6 +34,18 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   const path = (await context.params).path.join("/");
   if (!routes.some(([method, pattern]) => method === request.method && pattern.test(path))) {
     return failure("Unknown API route.", 404);
+  }
+  const search = new URL(request.url).searchParams;
+  const pagination = new URLSearchParams();
+  if (path === "tenant/memberships" && request.method === "GET") {
+    for (const [key, value] of search) {
+      if (!["page", "size"].includes(key) || search.getAll(key).length !== 1 || !/^\d+$/.test(value)
+          || !Number.isSafeInteger(Number(value)) || Number(value) > 2147483647
+          || (key === "size" && (Number(value) < 1 || Number(value) > 100))) {
+        return failure("Invalid membership pagination.", 400);
+      }
+      pagination.set(key, value);
+    }
   }
   const mutation = request.method !== "GET";
   const expectedOrigin = process.env.WEB_ORIGIN ?? new URL(request.url).origin;
@@ -63,7 +78,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
   try {
     const origin = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";
-    const upstream = await fetch(new URL(`/api/v1/${path}`, origin), {
+    const upstream = await fetch(new URL(`/api/v1/${path}${pagination.size ? `?${pagination}` : ""}`, origin), {
       method: request.method, headers, body: body as BodyInit | undefined,
       cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(15000),
     });
@@ -82,4 +97,4 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
     return failure("FieldOps is temporarily unavailable. Please try again.", 503);
   }
 }
-export { proxy as GET, proxy as POST, proxy as PATCH };
+export { proxy as GET, proxy as POST, proxy as PATCH, proxy as PUT };

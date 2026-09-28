@@ -23,7 +23,7 @@ export async function api<T>(path: string, options: { method?: string; data?: un
   return body as T;
 }
 export function setIntent(value: string) {
-  if (value === "create-business" || /^invitation:[0-9a-f-]{36}$/.test(value)) sessionStorage.setItem("fieldops:intent", value);
+  if (/^request-preview:[a-z0-9-]+$/.test(value) || value === "create-business" || /^invitation:[0-9a-f-]{36}$/.test(value)) sessionStorage.setItem("fieldops:intent", value);
 }
 export function clearAccountState() {
   Object.keys(sessionStorage).filter(key => key.startsWith("fieldops:")).forEach(key => sessionStorage.removeItem(key));
@@ -31,7 +31,7 @@ export function clearAccountState() {
 export function rememberUser(id: string) {
   const previous = sessionStorage.getItem("fieldops:user");
   if (previous && previous !== id) {
-    Object.keys(sessionStorage).filter(key => key.startsWith("fieldops:tenant:")).forEach(key => sessionStorage.removeItem(key));
+    Object.keys(sessionStorage).filter(key => (key.startsWith("fieldops:tenant:") || key.startsWith("fieldops:context:"))).forEach(key => sessionStorage.removeItem(key));
   }
   sessionStorage.setItem("fieldops:user", id);
 }
@@ -39,16 +39,15 @@ export async function destination(user: User, signal?: AbortSignal): Promise<str
   rememberUser(user.id);
   if (!user.emailVerifiedAt) return "/verify-email";
   const intent = sessionStorage.getItem("fieldops:intent");
+  if (intent?.startsWith("request-preview:")) return `/my/requests/new?provider=${encodeURIComponent(intent.slice(16))}`;
   if (intent === "create-business") return "/create-business";
   if (intent?.startsWith("invitation:")) return `/invitations/accept?id=${encodeURIComponent(intent.slice(11))}`;
   const businesses = await api<Business[]>("businesses", { signal });
-  if (businesses.length === 1) return `/app/${businesses[0].id}`;
+  if (sessionStorage.getItem(`fieldops:context:${user.id}`) === "personal") return "/my";
   const remembered = sessionStorage.getItem(`fieldops:tenant:${user.id}`);
   if (businesses.some(business => business.id === remembered)) return `/app/${remembered}`;
   if (businesses.length === 0) {
-    const invitations = await api<Invitation[]>("invitations", { signal });
-    if (invitations.length) return "/invitations";
-    if (user.platformAdmin) return "/platform";
+    return "/my";
   }
   return "/select-business";
 }

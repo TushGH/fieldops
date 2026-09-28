@@ -23,9 +23,12 @@ export function AccountForm({ mode }: { mode: Mode }) {
     // Capture browser-only input after hydration and when a mail link targets this already-open page.
     captureFragment();
     window.addEventListener("hashchange", captureFragment);
-    if (new URLSearchParams(window.location.search).get("intent") === "create-business") setIntent("create-business");
+    if (new URLSearchParams(window.location.search).get("intent") === "create-business") {
+      setIntent("create-business");
+      if (mode === "signup") window.location.replace("/login");
+    }
     return () => window.removeEventListener("hashchange", captureFragment);
-  }, []);
+  }, [mode]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -49,10 +52,10 @@ export function AccountForm({ mode }: { mode: Mode }) {
     } catch (error) { setError(error instanceof Error ? error.message : "Please try again."); }
     finally { setBusy(false); }
   }
-  const title = { login: "Welcome back.", signup: "One account. Every business.", complete: "Choose your password.", verify: "Verify your email." }[mode];
+  const title = { login: "Welcome back.", signup: "One account. More possibilities.", complete: "Choose your password.", verify: "Verify your email." }[mode];
   return <IdentityShell signedIn={mode === "verify"}><div className="account-grid">
     <Heading eyebrow="Your FieldOps account" title={title}>
-      {mode === "signup" ? "Create your account first. Then start a business or join a team that invited you." : mode === "verify" ? "Confirm your email address before creating or entering a business." : "Your account connects you to the service businesses you work with."}
+      {mode === "signup" ? "Find services, join your team, or start a business after signing in." : mode === "verify" ? "Confirm your email address before creating or entering a business." : "Your personal space and every business you work with, together."}
     </Heading>
     <section className="panel">
       {error && <p role="alert" className="error">{error}</p>}

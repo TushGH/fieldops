@@ -1,26 +1,13 @@
 "use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import { api, clearAccountState } from "@/lib/identity-api";
-
-export function IdentityShell({ children, signedIn = false }: { children: ReactNode; signedIn?: boolean }) {
-  const router = useRouter();
-  const [error, setError] = useState("");
-  async function logout() {
-    try { await api("auth/logout", { method: "POST" }); clearAccountState(); router.replace("/login"); }
-    catch { setError("Sign out failed. Please try again."); }
-  }
-  return <div className="identity-shell">
-    <header className="identity-header"><Link href="/" className="brand">FieldOps<span>.</span></Link>
-      {signedIn ? <nav aria-label="Account"><a href="/select-business">Switch business</a><a href="/invitations">Invitations</a><button onClick={logout}>Sign out</button></nav>
-        : <a href="/login">Sign in</a>}
-    </header>
-    <main className="identity-main">{error && <p role="alert" className="error">{error}</p>}{children}</main>
-    <footer className="identity-footer">Field service, thoughtfully organized.</footer>
-  </div>;
+import {useEffect,useState,type ReactNode} from "react";
+import {useRouter} from "next/navigation";
+import {api,clearAccountState,type Business} from "@/lib/identity-api";
+import {Brand} from "./public-shell";
+export function IdentityShell({children,signedIn=false}: {children:ReactNode;signedIn?:boolean}){
+ const router=useRouter(); const [error,setError]=useState("");const [businesses,setBusinesses]=useState<Business[]>([]);const [switchError,setSwitchError]=useState(false);
+ useEffect(()=>{if(!signedIn)return;const controller=new AbortController();api<Business[]>("businesses",{signal:controller.signal}).then(setBusinesses).catch(()=>{if(!controller.signal.aborted)setSwitchError(true);});return()=>controller.abort();},[signedIn]);
+ async function logout(){try{await api("auth/logout",{method:"POST"});clearAccountState();router.replace("/login");}catch{setError("Sign out failed. Please try again.");}}
+ return <div className="identity-shell"><a className="skip-link" href="#main">Skip to content</a><header className="identity-header"><Brand/>{signedIn?<nav aria-label="Account"><details className="context-menu"><summary>Switch workspace</summary><div className="context-options"><Link href="/my">Personal — My service requests</Link>{[true,false].map(owned=><div key={String(owned)}><span className="hint">{owned?"My businesses":"Businesses I work with"}</span>{businesses.filter(b=>(b.role==="BUSINESS_OWNER")===owned).map(b=><Link key={b.id} href={`/app/${b.id}`}>{b.name}<small>{b.role.replaceAll("_"," ").toLowerCase()}</small></Link>)}</div>)}{switchError&&<p className="hint">Business list unavailable. Open the chooser to retry.</p>}<Link href="/select-business">Switch business</Link><Link href="/create-business">Create business</Link></div></details><Link href="/invitations">Invitations</Link><button className="secondary small" onClick={logout}>Sign out</button></nav>:<nav aria-label="Account"><Link href="/services">Find services</Link><Link href="/login" className="button small">Sign in</Link></nav>}</header><main id="main" className="identity-main">{error&&<p role="alert" className="error">{error}</p>}{children}</main><footer className="identity-footer"><span>FieldOps · Good work, connected.</span><Link href="/about">About us</Link><Link href="/contact">Contact us</Link></footer></div>;
 }
-export function Heading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
-  return <div className="identity-heading"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1>{children && <p className="muted">{children}</p>}</div>;
-}
+export function Heading({eyebrow,title,children}:{eyebrow:string;title:string;children?:ReactNode}){return <div className="identity-heading"><p className="kicker">{eyebrow}</p><h1>{title}</h1>{children&&<p className="muted">{children}</p>}</div>;}
