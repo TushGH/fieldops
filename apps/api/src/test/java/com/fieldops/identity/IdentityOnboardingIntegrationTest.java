@@ -257,6 +257,18 @@ class IdentityOnboardingIntegrationTest {
         }
     }
 
+    @Test void legacyCombinedSignupCannotBypassEmailVerification() throws Exception {
+        var email = email();
+        var input = Map.of("businessName", "Legacy Signup", "slug", "legacy-" + UUID.randomUUID(),
+                "ownerName", "Legacy Owner", "email", email, "password", PASSWORD);
+        try (var anonymous = new Browser(); var signedIn = account()) {
+            assertThat(anonymous.post("onboarding", input, null).statusCode()).isEqualTo(401);
+            assertThat(signedIn.post("onboarding", input, null).statusCode()).isEqualTo(404);
+            assertThat(count("users", "email", email)).isZero();
+            assertThat(count("tenants", "slug", input.get("slug"))).isZero();
+        }
+    }
+
     private static String email() { return UUID.randomUUID() + "@example.com"; }
     private static int count(String table, String column, Object value) { return jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE " + column + " = ?", Integer.class, value); }
     private static UUID createUser(String email, boolean verified) {

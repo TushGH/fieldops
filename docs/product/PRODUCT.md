@@ -1,6 +1,6 @@
 # FieldOps product definition
 
-Status: proposed product baseline for Phase 0. All capabilities below are planned, not implemented.
+Status: product baseline. Email-first signup, login, verified-account business creation, invitations, and restricted platform provisioning are implemented; other journeys remain milestone-driven.
 
 ## Product vision
 
@@ -28,7 +28,7 @@ Personas describe product needs, not a commitment to implement every login or pe
 
 ## Primary user journeys
 
-1. **Onboard a business:** a platform administrator establishes a tenant and its owner. The owner brings dispatchers and technicians into that tenant with appropriate access. Initial onboarding may be operator-assisted; public signup and subscription checkout are deferred.
+1. **Onboard a business:** an owner registers and verifies an account, signs in, then creates a business. Existing verified accounts can create additional businesses and invite staff; restricted operators can provision owner invitations. Subscription checkout remains deferred.
 2. **Capture a service request:** a customer contacts the business; an owner or dispatcher finds or creates the customer and service address, records the issue, and opens a work order. Staff confirm or cancel it through allowed operations.
 3. **Plan and assign a visit:** a dispatcher selects an appointment window and eligible technician, checks availability, and confirms the assignment. Conflicts are rejected or resolved explicitly. Rescheduling retains a clear record of the change.
 4. **Perform the work:** the assigned technician views the visit and relevant customer information, marks progress, and records completion notes. Important state changes are validated and recorded so office staff can see reliable status.

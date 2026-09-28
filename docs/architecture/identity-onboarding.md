@@ -1,6 +1,6 @@
 # Identity onboarding implementation
 
-Implemented 2026-09-27. [ADR 0007](../adr/0007-identity-onboarding.md) records the decisions; the [proposal](identity-onboarding-experience-proposal.md) remains the broader design reference. This checkout started at V5 with no signup or frontend authentication. No legacy combined-signup endpoint was removed because none existed here.
+Implemented 2026-09-27. [ADR 0007](../adr/0007-identity-onboarding.md) records the decisions; the [proposal](identity-onboarding-experience-proposal.md) remains the broader design reference. Integration with main replaces the earlier combined account/business signup endpoint (`/api/v1/onboarding`) and its frontend proxy with the email-first flow. Existing users, credentials, memberships, and businesses are preserved; legacy users must verify their email.
 
 ## Delivered workflows
 

@@ -1,6 +1,8 @@
 package com.fieldops.tenant.api;
 
 import com.fieldops.tenant.application.TenantAccessException;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -29,7 +31,7 @@ public class TenantApiErrors {
     }
 
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class,
-            MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class})
+            MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class, ConstraintViolationException.class})
     ResponseEntity<ApiError> invalidInput(Exception exception) {
         rejected();
         return ResponseEntity.badRequest().body(new ApiError("INVALID_REQUEST", "The request contains invalid fields."));
@@ -40,10 +42,11 @@ public class TenantApiErrors {
         return ResponseEntity.status(409).body(new ApiError("CONCURRENT_UPDATE", "The record was changed by another request."));
     }
 
-    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> duplicate(Exception exception) {
         return ResponseEntity.status(409).body(new ApiError("CONFLICT", "This operation conflicts with an existing record. Use sign in for an existing account, or choose a different business slug."));
     }
 
     public record ApiError(String code, String message) { }
+
 }
