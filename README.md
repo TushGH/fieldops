@@ -151,6 +151,7 @@ The browser requests `/api/health` from Next.js. The server forwards to the fixe
 | `DATABASE_URL` | Root `.env` | Backend JDBC URL; align database name and port with Compose |
 | `API_PORT` | Root `.env` | Backend port; default `8080` |
 | `SESSION_COOKIE_SECURE` | Root `.env` | Defaults to `true`; set `false` only for local HTTP authentication |
+| `WEB_ORIGIN` | Root `.env` and `apps/web/.env.local` | Browser origin for email links and frontend mutation checks; local default `http://127.0.0.1:3000` |
 | `API_BASE_URL` | `apps/web/.env.local` | Next.js server's backend URL; default `http://127.0.0.1:8080` |
 
 If port 5432 is occupied, set `POSTGRES_PORT=55432` and `DATABASE_URL=jdbc:postgresql://localhost:55432/fieldops` in `.env`, then rerun Compose and restart the backend with the new environment. If changing `API_PORT`, update the frontend's `API_BASE_URL` and restart it. Set `PORT=3001 npm run dev` if the web port is occupied.
@@ -164,6 +165,10 @@ Stop the frontend and backend with Ctrl+C. Stop the database from the repository
 ## Email and onboarding
 
 Registration sends an expiring verification link before creating an account. Configure `WEB_ORIGIN`, `MAIL_HOST`, `MAIL_PORT`, and `MAIL_FROM` in the root `.env`, plus the provider's authentication/TLS settings when needed. The defaults expect a separately supplied local SMTP inbox on port 1025; Compose does not start one. Export the variables and restart the backend. No tokens or initial passwords are printed to logs.
+
+For an existing Mailpit container named `mailpit`, run `docker start mailpit` and confirm `docker port mailpit` shows SMTP port 1025 and inbox port 8025. Set `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`, `MAIL_AUTH=false`, and `MAIL_STARTTLS=false` in `.env` because the API runs on the host. Open [the Mailpit inbox](http://127.0.0.1:8025) to receive verification links. During `npm run dev`, the frontend accepts `localhost`, `127.0.0.1`, and `[::1]` aliases for a configured loopback `WEB_ORIGIN`, with the same scheme and port. Production requires the exact configured origin. Keep using one hostname during a session because browser cookies are host-specific.
+
+With configuration ready, `./scripts/start-local.sh` starts PostgreSQL and both applications, writing application logs under `logs/`. Use `--check` to validate prerequisites first. Ctrl+C stops the applications and leaves the database and separately managed Mailpit running.
 
 After registration, sign in, create a business, and review its setup. Business owners can invite teammates from the workspace; teammates use their existing global account or register once. Email delivery failures leave committed challenges/invitations recoverable by resend. See the [complete configuration and operator guide](docs/architecture/identity-onboarding.md#smtp-limits-audit-and-operation).
 

@@ -11,13 +11,30 @@ function failure(message: string, status: number) {
   return Response.json({ message }, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 
+function acceptsOrigin(origin: string | null, expectedOrigin: string) {
+  if (origin === expectedOrigin) return true;
+  if (!origin || process.env.NODE_ENV !== "development") return false;
+  try {
+    const actual = new URL(origin);
+    const expected = new URL(expectedOrigin);
+    const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
+    // Local browser aliases may differ from Next's internal request hostname.
+    return actual.origin === origin && loopback.has(actual.hostname)
+      && loopback.has(expected.hostname) && actual.protocol === expected.protocol
+      && actual.port === expected.port;
+  } catch {
+    return false;
+  }
+}
+
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const path = (await context.params).path.join("/");
   if (!routes.some(([method, pattern]) => method === request.method && pattern.test(path))) {
     return failure("Unknown API route.", 404);
   }
   const mutation = request.method !== "GET";
-  if (mutation && request.headers.get("origin") !== new URL(request.url).origin) {
+  const expectedOrigin = process.env.WEB_ORIGIN ?? new URL(request.url).origin;
+  if (mutation && !acceptsOrigin(request.headers.get("origin"), expectedOrigin)) {
     return failure("Request origin rejected.", 403);
   }
   const headers = new Headers();
